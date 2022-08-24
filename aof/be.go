@@ -33,3 +33,7 @@ func load64LE(p unsafe.Pointer) uint64 {
 	r := bits.ReverseBytes64(atomic.LoadUint64((*uint64)(p)))
 	return (*int64)(unsafe.Pointer(&r))
 }
+
+func lastByteUint64LE(v uint64) byte {
+	return (*(*[8]byte)(unsafe.Pointer(&v)))[0]
+}

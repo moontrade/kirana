@@ -51,6 +51,14 @@ type Task struct {
 	stop      bool
 }
 
+func (t *Task) CheckGID() bool {
+	r := t.reactor
+	if r == nil {
+		return true
+	}
+	return r.CheckGID()
+}
+
 func (t *Task) init(id int64, reactor *Reactor, future Future) {
 	*t = Task{
 		id:      id,
@@ -212,7 +220,14 @@ func (tq *taskSwapList) clear(idx int) {
 	}
 }
 
-func (tq *taskSwapList) iterate(now int64, fn func(now int64, list *taskSwapList, slot *taskSwapSlot, task *Task) bool) {
+func (tq *taskSwapList) iterate(
+	now int64,
+	fn func(
+		now int64,
+		list *taskSwapList,
+		slot *taskSwapSlot,
+		task *Task,
+	) bool) {
 	idx := 0
 	for idx < tq.size {
 		slot := tq.get(idx)

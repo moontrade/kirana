@@ -3,23 +3,27 @@ package aof
 import (
 	"encoding/binary"
 	"errors"
+	"github.com/moontrade/wormhole/pkg/util"
 	"unsafe"
+)
+
+const (
+	// MagicTail Little-Endian = [170 36 117 84 99 156 155 65]
+	// After each write the MagicTail is appended to the end.
+	MagicTail = uint64(4727544184288126122)
+	// MagicCheckpoint Little-Endian = [44 219 31 242 165 172 120 248]
+	MagicCheckpoint = uint64(17904250147343162156)
 )
 
 var (
 	RecoveryDefault = Recovery{
 		Magic: Magic{
-			Tail: MagicTail,
-			EOF:  MagicEOF,
+			Tail:       MagicTail,
+			Checkpoint: MagicCheckpoint,
 		},
 		Func: RecoverWithMagic,
 	}
-	AlwaysEOF = Recovery{
-		Func: func(fileSize int64, data []byte, magic Magic) (size int64, result RecoveryResult, err error) {
-			return fileSize, RecoveryResultEOF, nil
-		},
-		EOF: true,
-	}
+	RecoveryReadOnly = Recovery{}
 )
 
 // Recovery recovers an existing file on open by finding the tail. Since files are mapped
@@ -35,36 +39,49 @@ type Recovery struct {
 	tail   int64
 	result RecoveryResult
 	err    error
-	EOF    bool
 }
 
-type RecoveryResult int
+type RecoveryResult struct {
+	Magic      Magic
+	Outcome    RecoveryKind
+	FileSize   int64
+	Checkpoint int64
+	Tail       int64
+	Err        error
+}
+
+type RecoveryKind int
 
 const (
-	RecoveryResultEmpty     RecoveryResult = 0 // The Magic value was found at the tail
-	RecoveryResultCorrupted RecoveryResult = 1 // The Magic value was found at the tail
-	RecoveryResultTail      RecoveryResult = 2 // The Magic value was found at the tail
-	RecoveryResultEOF       RecoveryResult = 3 // The Magic EOF value was found at the tail
+	Empty      RecoveryKind = 0 // The Magic value was found at the tail
+	Corrupted  RecoveryKind = 1 // The Magic value was found at the tail
+	Tail       RecoveryKind = 2 // The Magic value was found at the tail
+	Checkpoint RecoveryKind = 3 // The Magic Checkpoint value was found at the tail
+	Panic      RecoveryKind = 4 // The Magic Checkpoint value was found at the tail
 )
 
 type RecoveryFunc func(
 	fileSize int64,
 	data []byte,
 	magic Magic,
-) (size int64, result RecoveryResult, err error)
+) (result RecoveryResult)
 
-// Magic provides magic numbers for Tail and EOF.
+// Magic provides magic numbers for Tail and Checkpoint.
 type Magic struct {
-	Tail uint64 // Tail is the magic number that marks the tail of the file
-	EOF  uint64 // EOF is the magic number that marks the end of the file
+	// Tail is the magic number that marks the tail of the file
+	Tail uint64
+	// Checkpoint is the magic number that marks the end of a chunk.
+	// During recovery if the Magic Tail is not found, it will search
+	// for the last Checkpoint
+	Checkpoint uint64
 }
 
 func (m *Magic) IsDisabled() bool {
-	return m.Tail == 0 || m.EOF == 0
+	return m.Tail == 0 || m.Checkpoint == 0
 }
 
 func (m *Magic) IsEnabled() bool {
-	return m.Tail != 0 && m.EOF != 0
+	return m.Tail != 0 && m.Checkpoint != 0
 }
 
 func (r *Recovery) Result() RecoveryResult { return r.result }
@@ -76,26 +93,38 @@ func (r *Recovery) Clone() Recovery {
 	c.Func = r.Func
 	return c
 }
-func (r *Recovery) Do(fileSize int64, data []byte) error {
-	r.tail, r.result, r.err = r.Func(fileSize, data, r.Magic)
-	return r.err
-}
 
-// RecoverWithMagic finds the last magic tail or eof. Any other first value results in corruption result.
-func RecoverWithMagic(fileSize int64, data []byte, magic Magic) (end int64, result RecoveryResult, err error) {
+// RecoverWithMagic finds the last magic tail or last checkpoint
+func RecoverWithMagic(fileSize int64, data []byte, magic Magic) (result RecoveryResult) {
+	defer func() {
+		if e := recover(); e != nil {
+			result.Err = util.PanicToError(e)
+			result.Outcome = Panic
+		}
+	}()
+	result.Magic = magic
+	result.FileSize = fileSize
 	if fileSize > int64(len(data)) {
-		return 0, RecoveryResultCorrupted, errors.New("fileSize is greater than mapping")
+		result.Outcome = Corrupted
+		result.Err = errors.New("fileSize is greater than mapping")
+		return
 	}
 	if fileSize < 8 {
 		if len(data) == 0 {
-			return 0, RecoveryResultTail, nil
+			result.Outcome = Tail
+			result.Tail = 0
+			return
 		}
 		for i := len(data) - 1; i > -1; i-- {
 			if data[i] != 0 {
-				return int64(i + 1), RecoveryResultTail, nil
+				result.Outcome = Tail
+				result.Tail = int64(i + 1)
+				return
 			}
 		}
-		return 0, RecoveryResultTail, nil
+		result.Outcome = Empty
+		result.Tail = 0
+		return
 	}
 	var d uint64
 	for start := fileSize - 8; start >= 0; start -= 8 {
@@ -110,52 +139,73 @@ func RecoverWithMagic(fileSize int64, data []byte, magic Magic) (end int64, resu
 				if start >= 0 {
 					d = binary.LittleEndian.Uint64(data[start:])
 					if d == magic.Tail {
-						return start, RecoveryResultTail, nil
+						result.Outcome = Tail
+						result.Tail = start
+
+						if magic.Checkpoint != 0 {
+							magicCheckpointLast := lastByteUint64LE(magic.Checkpoint)
+							// Search for last checkpoint.
+							last--
+							for last > 7 {
+								if data[last] != magicCheckpointLast {
+									last--
+									continue
+								}
+								d = binary.LittleEndian.Uint64(data[last-7:])
+								if d == magic.Checkpoint {
+									result.Checkpoint = last - 7
+									return
+								}
+								last--
+							}
+						}
+
+						return
 					}
-					if d == magic.EOF {
-						return start, RecoveryResultEOF, nil
+					if d == magic.Checkpoint {
+						result.Outcome = Checkpoint
+						result.Tail = start + 8
+						result.Checkpoint = start
+						return
 					}
-					return last + 1, RecoveryResultCorrupted, nil
+					tail := last
+
+					if magic.Checkpoint != 0 {
+						magicCheckpointLast := lastByteUint64LE(magic.Checkpoint)
+						// Search for last checkpoint.
+						last--
+						for last > 7 {
+							if data[last] != magicCheckpointLast {
+								last--
+								continue
+							}
+							d = binary.LittleEndian.Uint64(data[last-7:])
+							if d == magic.Checkpoint {
+								result.Outcome = Checkpoint
+								result.Checkpoint = last - 7
+								result.Tail = last + 1
+								return
+							}
+							last--
+						}
+					}
+
+					result.Outcome = Corrupted
+					result.Tail = tail + 1
+					return
 				} else {
-					return last + 1, RecoveryResultCorrupted, nil
+					result.Outcome = Corrupted
+					result.Tail = last + 1
+					return
 				}
 			}
 		}
-		return start + 8, RecoveryResultCorrupted, nil
+		result.Outcome = Corrupted
+		result.Tail = start + 8
+		return
 	}
 	// File is empty
-	return 0, RecoveryResultEmpty, nil
-}
-
-func RecoverFirstNonZero(fileSize int64, data []byte, magic Magic) (size int64, result RecoveryResult, err error) {
-	if fileSize > int64(len(data)) {
-		return 0, RecoveryResultCorrupted, errors.New("fileSize is greater than mapping")
-	}
-	if fileSize < 8 {
-		if len(data) == 0 {
-			return 0, RecoveryResultTail, nil
-		}
-		for i := len(data) - 1; i > -1; i-- {
-			if data[i] != 0 {
-				return int64(i + 1), RecoveryResultTail, nil
-			}
-		}
-		return 0, RecoveryResultTail, nil
-	}
-	for start := fileSize - 8; start >= 0; start -= 8 {
-		// Speed up scanning by using a uint64
-		if *(*uint64)(unsafe.Pointer(&data[start])) == 0 {
-			continue
-		}
-		// Find last non-zero byte
-		for i := int64(7); i > -1; i-- {
-			if data[start+i] != 0 {
-				return int64(start + i + 1), RecoveryResultTail, nil
-			}
-		}
-		// No zero bytes in uint64
-		return start + 8, RecoveryResultTail, nil
-	}
-	// File is empty
-	return 0, RecoveryResultTail, nil
+	result.Outcome = Empty
+	result.Tail = 0
+	return
 }

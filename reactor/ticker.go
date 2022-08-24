@@ -48,8 +48,8 @@ func (t *Ticker) Close() error {
 	return nil
 }
 
-func (t *Ticker) Register(duration time.Duration, owner interface{}) (*TickListener, error) {
-	ln, err := newTickListener(t, duration, owner)
+func (t *Ticker) Register(duration time.Duration, owner interface{}, ch chan int) (*TickListener, error) {
+	ln, err := newTickListener(t, duration, owner, ch)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (t *Ticker) run() {
 type TickListener struct {
 	ticker        *Ticker
 	owner         interface{}
-	ch            chan Tick
+	ch            chan int
 	dur           time.Duration
 	last          int64
 	total         int64
@@ -162,7 +162,7 @@ type TickListener struct {
 	mu            sync.Mutex
 }
 
-func (tl *TickListener) Chan() <-chan Tick {
+func (tl *TickListener) Chan() <-chan int {
 	return tl.ch
 }
 
@@ -184,14 +184,18 @@ func newTickListener(
 	ticker *Ticker,
 	duration time.Duration,
 	owner interface{},
+	ch chan int,
 ) (*TickListener, error) {
 	if duration <= 0 {
 		return nil, errors.New("duration must be positive")
 	}
+	if ch == nil {
+		return nil, errors.New("chan is nil")
+	}
 	return &TickListener{
 		ticker: ticker,
 		owner:  owner,
-		ch:     make(chan Tick, 2),
+		ch:     ch,
 		dur:    duration,
 		next:   Tick{Dur: duration},
 	}, nil
@@ -233,7 +237,7 @@ func (tl *TickListener) doNotify() {
 		}
 	}()
 	select {
-	case tl.ch <- tl.next:
+	case tl.ch <- int(tl.next.Time):
 		tl.notifySuccess++
 	default:
 		tl.notifyFails++

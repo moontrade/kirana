@@ -101,6 +101,7 @@ func BenchmarkConcurrentPool(b *testing.B) {
 
 	b.Run("Pool", func(b *testing.B) {
 		pool := NewPool[func()](Config[func()]{
+			ShardFunc:     ShardByGoroutineID,
 			PageSize:      1024,
 			PagesPerShard: 1024,
 			AllocFunc: func() unsafe.Pointer {
@@ -408,6 +409,7 @@ func TestConcurrentPool(t *testing.T) {
 		}
 		//fnp := runtimex.FuncToPointer(fn)
 		pool := NewPool[func()](Config[func()]{
+			//ShardFunc: ShardByGoroutineID,
 			AllocFunc: func() unsafe.Pointer {
 				return runtimex.FuncToPointer(fn)
 			},

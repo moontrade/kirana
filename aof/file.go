@@ -18,10 +18,12 @@ import (
 )
 
 var (
-	ErrShrink      = errors.New("shrink prohibited")
-	ErrIsDirectory = errors.New("path is a directory")
-	ErrCorrupted   = errors.New("corrupted")
-	ErrEmptyFile   = errors.New("eof mode on empty file")
+	ErrShrink         = errors.New("shrink prohibited")
+	ErrIsDirectory    = errors.New("path is a directory")
+	ErrCorrupted      = errors.New("corrupted")
+	ErrEmptyFile      = errors.New("eof mode on empty file")
+	ErrFileIsReadOnly = errors.New("file is read-only")
+	ErrReadPermission = errors.New("file has no read permission")
 )
 
 type FileState int32
@@ -34,29 +36,21 @@ const (
 	FileStateClosed  FileState = 4
 )
 
-func (s *FileState) Load() FileState {
+func (s *FileState) load() FileState {
 	return FileState(atomic.LoadInt32((*int32)(s)))
 }
 
-func (s *FileState) Store(value FileState) {
+func (s *FileState) store(value FileState) {
 	atomic.StoreInt32((*int32)(s), int32(value))
 }
 
-func (s *FileState) Xchg(value FileState) FileState {
+func (s *FileState) xchg(value FileState) FileState {
 	return FileState(atomicx.Xchgint32((*int32)(s), int32(value)))
 }
 
-func (s *FileState) CAS(old, new FileState) bool {
+func (s *FileState) cas(old, new FileState) bool {
 	return atomicx.Casint32((*int32)(s), int32(old), int32(new))
 }
-
-const (
-	// MagicTail Little-Endian = [170 36 117 84 99 156 155 65]
-	// After each write the MagicTail is appended to the end.
-	MagicTail = uint64(4727544184288126122)
-	// MagicEOF Little-Endian = [44 219 31 242 165 172 120 248]
-	MagicEOF = uint64(17904250147343162156)
-)
 
 var (
 	pageSize = int64(os.Getpagesize())
@@ -79,6 +73,21 @@ type FileStats struct {
 	truncErrDur   counter.Counter
 }
 
+func hasReadPermission(perm os.FileMode) bool {
+	// check for specific permission: user read
+	return perm&0b100000000 == 0b100000000
+}
+
+func hasWritePermission(perm os.FileMode) bool {
+
+	// check for specific permission: user write
+	return perm&0b010000000 == 0b010000000
+}
+
+func hasReadWritePermission(perm os.FileMode) bool {
+	return perm&0b110000000 == 0b110000000
+}
+
 // AOF is a single-producer multiple-consumer memory-mapped
 // append only file. The same mapping is shared among any number
 // of consumers. Each instance has a single mmap for its lifetime.
@@ -91,6 +100,7 @@ type FileStats struct {
 type AOF struct {
 	m          *Manager
 	f          *os.File
+	readOnly   bool
 	closed     int64
 	name       string
 	data       mmap.MMap
@@ -166,18 +176,22 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 		end := timex.NanoTime()
 		elapsed := end - begin
 		if err == nil {
-			err = aof.err
+			if aof != nil {
+				err = aof.err
+			}
 		}
 		if err != nil {
-			aof.state.Store(FileStateClosed)
-			if aof.f != nil {
-				_ = aof.f.Close()
+			if aof != nil {
+				aof.state.store(FileStateClosed)
+				if aof.f != nil {
+					_ = aof.f.Close()
+				}
+				m.gcList.Add(aof)
 			}
-			m.gcList.Add(aof)
 			m.stats.OpenErrors.Incr()
 			m.stats.OpenErrorsDur.Add(elapsed)
 		} else {
-			aof.state.CAS(FileStateOpening, FileStateOpened)
+			aof.state.cas(FileStateOpening, FileStateOpened)
 			m.stats.Opens.Incr()
 			m.stats.OpensDur.Add(elapsed)
 			m.stats.ActiveMaps.Incr()
@@ -194,11 +208,14 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 	}
 	geometry.Validate()
 	aof.geometry = geometry
-	var info os.FileInfo
+	var (
+		info os.FileInfo
+		mode os.FileMode
+	)
 	info, aof.err = os.Stat(path)
 	if aof.err != nil {
 		if os.IsNotExist(aof.err) {
-			if !geometry.Create || recovery.EOF {
+			if !geometry.Create {
 				return nil, os.ErrNotExist
 			}
 			aof.err = nil
@@ -211,6 +228,7 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 				return nil, ErrIsDirectory
 			}
 			aof.fileSize = info.Size()
+			mode = info.Mode()
 		} else {
 			return nil, aof.err
 		}
@@ -220,12 +238,25 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 			return nil, ErrIsDirectory
 		}
 		aof.fileSize = info.Size()
+		mode = info.Mode()
 	}
 
 	if aof.created {
-		aof.f, aof.err = os.OpenFile(path, os.O_CREATE|os.O_RDWR, m.perm)
+		aof.readOnly = false
+		aof.f, aof.err = os.OpenFile(path, os.O_CREATE|os.O_RDWR, m.writeMode)
 	} else {
-		aof.f, aof.err = os.OpenFile(path, os.O_RDWR, m.perm)
+		if hasReadWritePermission(mode.Perm()) {
+			aof.readOnly = false
+			aof.f, aof.err = os.OpenFile(path, os.O_RDWR, m.writeMode)
+		} else {
+			aof.readOnly = true
+			if !hasReadPermission(mode.Perm()) {
+				aof.err = ErrReadPermission
+				return nil, ErrReadPermission
+			}
+			aof.state.store(FileStateEOF)
+			aof.f, aof.err = os.OpenFile(path, os.O_RDONLY, m.readMode)
+		}
 	}
 
 	elapsed := timex.NanoTime() - begin
@@ -241,7 +272,7 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 	m.stats.OpenFileDur.Add(elapsed)
 
 	if aof.created || aof.fileSize == 0 {
-		if recovery.EOF {
+		if recovery.Func == nil {
 			return nil, ErrEmptyFile
 		}
 	}
@@ -250,7 +281,7 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 		aof.created = true
 	}
 
-	if aof.fileSize < geometry.SizeNow {
+	if aof.fileSize < geometry.SizeNow && aof.state != FileStateEOF {
 		before := timex.NanoTime()
 		aof.err = os.Truncate(path, geometry.SizeNow)
 		elapsed := timex.NanoTime() - before
@@ -267,8 +298,12 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 
 	var data mmap.MMap
 	before := timex.NanoTime()
-	if recovery.EOF {
-		data, aof.err = mmap.MapRegion(aof.f, int(aof.fileSize), mmap.RDWR, 0, 0)
+	if aof.state == FileStateEOF {
+		if aof.readOnly {
+			data, aof.err = mmap.MapRegion(aof.f, int(aof.fileSize), mmap.RDONLY, 0, 0)
+		} else {
+			data, aof.err = mmap.MapRegion(aof.f, int(aof.fileSize), mmap.RDWR, 0, 0)
+		}
 	} else {
 		data, aof.err = mmap.MapRegion(aof.f, int(geometry.SizeUpper), mmap.RDWR, 0, 0)
 	}
@@ -284,8 +319,10 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 	m.stats.Maps.Incr()
 	m.stats.MapsDur.Add(elapsed)
 
-	if !aof.created {
-		aof.err = aof.recovery.Do(aof.fileSize, data[0:aof.fileSize])
+	if !aof.created && !aof.readOnly && aof.recovery.Func != nil {
+		result := aof.recovery.Func(aof.fileSize, data[0:aof.fileSize], aof.recovery.Magic)
+		aof.recovery.result = result
+		aof.err = result.Err
 		if aof.err != nil {
 			mapped := int64(len(data))
 			begin = timex.NanoTime()
@@ -303,19 +340,24 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 		}
 		aof.size = aof.recovery.tail
 
-		switch aof.recovery.result {
-		case RecoveryResultCorrupted:
+		switch result.Outcome {
+		case Corrupted:
 			aof.err = ErrCorrupted
 			return aof, ErrCorrupted
 
-		case RecoveryResultTail:
+		case Tail:
+			aof.size = result.Tail - 8
 
-		case RecoveryResultEOF:
+		case Checkpoint:
+			aof.size = result.Checkpoint + 8
+			if result.Tail > result.Checkpoint+8 {
+				// Warn
+			}
 			// Truncate to size if needed
 			if aof.fileSize > aof.size {
 				// Final size
 				finalSize := aof.size
-				if aof.recovery.Magic.EOF > 0 {
+				if aof.recovery.Magic.Checkpoint > 0 {
 					finalSize += 8
 				}
 				if finalSize != aof.fileSize {
@@ -343,16 +385,19 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 			}
 
 			if aof.err == nil {
-				aof.state.Store(FileStateEOF)
+				aof.state.store(FileStateEOF)
 			}
 		}
+		aof.data = data
+	} else {
+		aof.data = data
 	}
-	aof.data = data
+
 	return aof, nil
 }
 
 func (aof *AOF) destruct() {
-	aof.state.CAS(FileStateClosing, FileStateClosed)
+	aof.state.cas(FileStateClosing, FileStateClosed)
 	var err error
 	data := aof.data
 	// Unmap
@@ -390,7 +435,7 @@ func (aof *AOF) tryGC() {
 }
 
 func (aof *AOF) Close() error {
-	state := aof.state.Load()
+	state := aof.state.load()
 	switch state {
 	case FileStateClosed:
 		return os.ErrClosed
@@ -405,7 +450,7 @@ func (aof *AOF) Close() error {
 	defer aof.writeMu.Unlock()
 
 	// Move into closing state
-	if !aof.state.CAS(state, FileStateClosing) {
+	if !aof.state.cas(state, FileStateClosing) {
 		return nil
 	}
 
@@ -433,7 +478,7 @@ func (m *Manager) createFile(name string) *AOF {
 	aof := aofPool.Get()
 	*aof = AOF{}
 	aof.m = m
-	aof.state.Store(FileStateOpening)
+	aof.state.store(FileStateOpening)
 	aof.openWg.Add(1)
 	aof.fileSize = 0
 	aof.data = nil

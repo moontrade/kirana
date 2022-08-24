@@ -7,6 +7,7 @@ import (
 	"github.com/bytedance/gopkg/util/gopool"
 	logger "github.com/moontrade/log"
 	"github.com/moontrade/wormhole/pkg/counter"
+	"github.com/moontrade/wormhole/pkg/gid"
 	"github.com/moontrade/wormhole/pkg/hashmap"
 	"github.com/moontrade/wormhole/pkg/mpsc"
 	"github.com/moontrade/wormhole/pkg/pmath"
@@ -119,7 +120,9 @@ type Reactor struct {
 	cancel         context.CancelFunc
 	tickCount      counter.Counter
 	nextTick       counter.Counter
-	pid            int
+	wakeCh         chan int
+	pid            int32
+	gid            int64
 	lockOSThread   bool
 	wg             sync.WaitGroup
 }
@@ -157,6 +160,7 @@ func NewReactor(config Config) (*Reactor, error) {
 		return nil, fmt.Errorf("minutes Tick not evenly divisible by millisecond Tick: %s mod %s = %s",
 			config.Level3Wheel.tickDur, config.Level1Wheel.tickDur, config.Level3Wheel.tickDur%config.Level1Wheel.tickDur)
 	}
+	wakeCh := make(chan int, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &Reactor{
 		tickDur:        config.Level1Wheel.tickDur,
@@ -165,11 +169,12 @@ func NewReactor(config Config) (*Reactor, error) {
 		ticksPerLevel2: int64(config.Level2Wheel.tickDur / config.Level1Wheel.tickDur),
 		level3Wheel:    config.Level3Wheel,
 		ticksPerLevel3: int64(config.Level3Wheel.tickDur / config.Level1Wheel.tickDur),
+		wakeCh:         wakeCh,
 		tasks:          hashmap.NewSync[int64, *Task](8, 1024, hashmap.HashInt64),
-		wakeQ:          mpsc.NewBounded[Task](int64(config.WakeQSize), nil),
-		wakeListQ:      mpsc.NewBounded[WakeList](int64(config.WakeQSize), nil),
-		spawnQ:         mpsc.NewBounded[Task](int64(config.SpawnQSize), nil),
-		invokeQ:        mpsc.NewBounded[func()](int64(config.InvokeQSize), nil),
+		wakeQ:          mpsc.NewBounded[Task](int64(config.WakeQSize), wakeCh),
+		wakeListQ:      mpsc.NewBounded[WakeList](int64(config.WakeQSize), wakeCh),
+		spawnQ:         mpsc.NewBounded[Task](int64(config.SpawnQSize), wakeCh),
+		invokeQ:        mpsc.NewBounded[func()](int64(config.InvokeQSize), wakeCh),
 		timer:          make(chan Tick, 1),
 		workerPool:     gopool.NewPool(config.Name, 10000, nil),
 		ctx:            ctx,
@@ -178,6 +183,10 @@ func NewReactor(config Config) (*Reactor, error) {
 	}
 	w.id = reactors.AppendIndex(w)
 	return w, nil
+}
+
+func (r *Reactor) CheckGID() bool {
+	return r.gid == gid.GID()
 }
 
 func (r *Reactor) ID() int { return r.id }
@@ -243,7 +252,7 @@ func (r *Reactor) WakeAfter(task *Task, after time.Duration) error {
 	}
 }
 
-func (r *Reactor) WakeList(list *WakeList) error {
+func (r *Reactor) wakeList(list *WakeList) error {
 	if list == nil {
 		return errors.New("nil slots")
 	}
@@ -251,7 +260,7 @@ func (r *Reactor) WakeList(list *WakeList) error {
 		return nil
 	}
 	if list.reactor != r {
-		return list.reactor.WakeList(list)
+		return list.reactor.wakeList(list)
 	}
 	if !r.wakeListQ.Push(list) {
 		return ErrQueueFull
@@ -327,38 +336,40 @@ func (r *Reactor) run() {
 		}
 	}()
 
-	r.pid = runtimex.Pid()
+	r.pid = gid.PID()
+	r.gid = gid.GID()
 	var (
-		invokeQ       = r.invokeQ
-		invokeQWake   = invokeQ.Wake()
-		wakeQ         = r.wakeQ
-		wakeQWake     = wakeQ.Wake()
-		wakeListQ     = r.wakeListQ
-		wakeListQWake = wakeListQ.Wake()
-		spawnQ        = r.spawnQ
-		spawnQWake    = spawnQ.Wake()
+		invokeQ = r.invokeQ
+		//invokeQWake   = invokeQ.Wake()
+		wakeQ = r.wakeQ
+		//wakeQWake     = wakeQ.Wake()
+		wakeListQ = r.wakeListQ
+		//wakeListQWake = wakeListQ.Wake()
+		spawnQ = r.spawnQ
+		//spawnQWake    = spawnQ.Wake()
 		//now         = timex.NanoTime()
-		pid     = r.pid
-		nextPid = pid
+		//pid = r.pid
+		//nextPid = pid
 	)
 
-	checkLoopPid := func() {
-		nextPid = runtimex.Pid()
-		if nextPid != pid {
-			//logger.Debug("loop pid changed from %d to %d between iterations", pid, nextPid)
-		}
-		pid = nextPid
-	}
+	//checkLoopPid := func() {
+	//	//nextPid = gid.PID() // runtimex.Pid()
+	//	//if nextPid != pid {
+	//	//	logger.Debug("loop pid changed from %d to %d between iterations", pid, nextPid)
+	//	//}
+	//	//pid = nextPid
+	//}
 
 	checkPid := func() {
-		nextPid = runtimex.Pid()
-		if nextPid != pid {
-			//logger.Warn("loop pid changed from %d to %d during loop execution", pid, nextPid)
-		}
-		pid = nextPid
+		//nextPid = gid.PID() //runtimex.Pid()
+		//if nextPid != pid {
+		//	logger.Warn("loop pid changed from %d to %d during loop execution", pid, nextPid)
+		//}
+		//pid = nextPid
 	}
 
 	r.nextTick.Store(timex.NanoTime() + int64(r.tickDur))
+	tickMsg := Tick{}
 
 	go func() {
 		interval := int64(r.tickDur)
@@ -368,14 +379,17 @@ func (r *Reactor) run() {
 			time.Sleep(time.Duration(r.nextTick.Load() - begin))
 
 			t := r.nextTick.Load()
-			tick := r.currentTick.Incr()
+			tickMsg.Tick = r.currentTick.Incr()
+			tickMsg.Time = t
+			//tick := r.currentTick.Incr()
 			r.nextTick.Add(interval)
 
 			select {
-			case r.timer <- Tick{
-				Time: t,
-				Tick: tick,
-			}:
+			case r.wakeCh <- int(t):
+			//case r.timer <- Tick{
+			//	Time: t,
+			//	Tick: tick,
+			//}:
 			// caught up
 			case <-r.ctx.Done():
 				break Loop
@@ -401,55 +415,29 @@ func (r *Reactor) run() {
 		r.invoke(task)
 	}
 
-	flushSpawnQueue := func() {
-		if spawnQ.IsEmpty() {
-			return
+	flushQueues := func() int {
+		total := 0
+		if !wakeListQ.IsEmpty() {
+			count := wakeListQ.PopMany(math.MaxUint32, onWakeList)
+			total += count
+			r.wakeLists.Add(int64(count))
 		}
-		r.now = timex.NanoTime()
-		count := spawnQ.PopMany(math.MaxUint32, onSpawn)
-		end := timex.NanoTime()
-		r.spawns.Add(int64(count))
-		r.spawnsDur.Add(end - r.now)
-	}
-
-	flushWakeQueue := func() {
-		if wakeQ.IsEmpty() {
-			return
+		if !invokeQ.IsEmpty() {
+			count := invokeQ.PopManyDeref(math.MaxUint32, onFn)
+			total += count
+			r.invokes.Add(int64(count))
 		}
-		r.now = timex.NanoTime()
-		count := wakeQ.PopMany(math.MaxUint32, onWake)
-		end := timex.NanoTime()
-		r.wakes.Add(int64(count))
-		r.wakesDur.Add(end - r.now)
-	}
-
-	flushWakeListsQueue := func() {
-		if wakeListQ.IsEmpty() {
-			return
+		if !wakeQ.IsEmpty() {
+			count := wakeQ.PopMany(math.MaxUint32, onWake)
+			total += count
+			r.wakes.Add(int64(count))
 		}
-		r.now = timex.NanoTime()
-		count := wakeListQ.PopMany(math.MaxUint32, onWakeList)
-		end := timex.NanoTime()
-		r.wakeLists.Add(int64(count))
-		r.wakesListsDur.Add(end - r.now)
-	}
-
-	flushInvokeQueue := func() {
-		if invokeQ.IsEmpty() {
-			return
+		if !spawnQ.IsEmpty() {
+			count := spawnQ.PopMany(math.MaxUint32, onSpawn)
+			total += count
+			r.spawns.Add(int64(count))
 		}
-		now := timex.NanoTime()
-		count := invokeQ.PopManyDeref(math.MaxUint32, onFn)
-		end := timex.NanoTime()
-		r.invokes.Add(int64(count))
-		r.invokesDur.Add(end - now)
-	}
-
-	flushQueues := func() {
-		flushInvokeQueue()
-		flushWakeQueue()
-		flushWakeListsQueue()
-		flushSpawnQueue()
+		return total
 	}
 
 	onTick := func(msg Tick) {
@@ -492,42 +480,45 @@ func (r *Reactor) run() {
 		defer runtime.UnlockOSThread()
 	}
 
-	lastTick := int64(0)
-Loop:
+	var (
+		_            = wakeListQ
+		_            = wakeQ
+		_            = onTick
+		backoffCount = 0
+		microTimer   = time.NewTimer(time.Microsecond * 50)
+		wakeCh       = r.wakeCh
+		_            = wakeCh
+		_            = backoffCount
+		_            = microTimer
+		//tickLn       = r.tickLn
+		//tick         = tickLn.next
+	)
+	//Loop:
 	for {
+		//time.Sleep(time.Microsecond)
+		//if false {
 		select {
-		case msg := <-r.timer:
-			checkLoopPid()
-			if lastTick < msg.Tick-1 {
-				r.catchup(lastTick, msg.Tick)
-			}
-			lastTick = msg.Tick
-			onTick(msg)
-			checkPid()
 
-		case <-wakeListQWake:
-			checkLoopPid()
-			flushWakeListsQueue()
-			checkPid()
+		//case msg := <-r.timer:
+		//	//checkLoopPid()
+		//	if lastTick < msg.Tick-1 {
+		//		r.catchup(lastTick, msg.Tick)
+		//	}
+		//	lastTick = msg.Tick
+		//	onTick(msg)
+		//flushQueues()
+		//checkPid()
+		//
+		case <-wakeCh:
+			r.now = timex.NanoTime()
+			flushQueues()
 
-		case <-wakeQWake:
-			checkLoopPid()
-			flushWakeQueue()
-			checkPid()
-
-		case <-spawnQWake:
-			checkLoopPid()
-			flushSpawnQueue()
-			checkPid()
-
-		case <-invokeQWake:
-			checkLoopPid()
-			flushInvokeQueue()
-			checkPid()
-
-		case <-r.ctx.Done():
-			break Loop
+			//default:
+			//	time.Sleep(time.Microsecond * 50)
+			//	//runtime.Gosched()
+			//	flushQueues()
 		}
+		//}
 	}
 }
 
@@ -657,16 +648,18 @@ func (r *Reactor) pollStart(now int64, task *Task) {
 }
 
 func (r *Reactor) pollWakeList(now int64, list *WakeList) {
+	//for list.onWake(now) > 0 {
+	list.onWake(now)
 	count := list.wakes.wake(now, r.onTaskSlotWake)
 	r.wakeListsWakes.Add(count)
-
 	count = list.funcs.wake(now, r.onFuncSlotWake)
 	r.wakeListsInvokes.Add(count)
+	//}
 }
 
 func (r *Reactor) onTaskSlotWake(slot *TaskSlot) {
 	t := slot.task
-	if t == nil || !slot.wake {
+	if t == nil {
 		return
 	}
 	r.pollWake(r.now, t)

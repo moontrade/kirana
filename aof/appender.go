@@ -35,38 +35,71 @@ var (
 	ErrWouldBlock = errors.New("would block")
 )
 
-func (aof *AOF) Finish() error {
+func (aof *AOF) Finish() (err error) {
 	aof.writeMu.Lock()
 	defer aof.writeMu.Unlock()
 	f := aof.f
-	if !aof.state.CAS(FileStateOpened, FileStateEOF) {
+	if !aof.state.cas(FileStateOpened, FileStateEOF) {
 		return os.ErrClosed
 	}
 	if f != nil {
 		aof.m.flushList.Remove(aof)
 
-		begin := timex.NanoTime()
+		stopwatch := timex.NewStopWatch()
+		start := int64(stopwatch)
+
+		defer func() {
+			elapsed := timex.NanoTime() - start
+			aof.m.stats.FinishesDur.Add(elapsed)
+			if aof.err != nil {
+				aof.m.stats.FinishErrors.Incr()
+				aof.m.stats.FinishErrorsDur.Add(elapsed)
+				err = aof.err
+			}
+		}()
+
 		aof.m.stats.Finishes.Incr()
 		finalSize := aof.size
-		// Replace MagicTail with MagicEOF
-		if aof.recovery.Magic.EOF != 0 {
-			write64LE(unsafe.Pointer(&aof.data[finalSize]), aof.recovery.Magic.EOF)
+		// Replace MagicTail with MagicCheckpoint?
+		if aof.recovery.Magic.Checkpoint != 0 {
+			write64LE(unsafe.Pointer(&aof.data[finalSize]), aof.recovery.Magic.Checkpoint)
 			finalSize += 8
 		}
-		// Truncate to size
-		aof.err = syscall.Truncate(f.Name(), finalSize)
+
+		// Flush
+		aof.err = aof.flush()
+		aof.m.stats.Flushes.Incr()
+		elapsed := stopwatch.Stop()
+		aof.m.stats.FlushesDur.Add(elapsed)
 		if aof.err != nil {
-			elapsed := timex.NanoTime() - begin
-			aof.m.stats.FinishErrors.Incr()
-			aof.m.stats.FinishErrorsDur.Add(elapsed)
-			return aof.err
+			aof.m.stats.FlushErrors.Incr()
+			aof.m.stats.FlushErrorsDur.Add(elapsed)
+			logger.WarnErr(aof.err, "error when flushing mmap")
 		}
-		aof.err = aof.sync()
-		elapsed := timex.NanoTime() - begin
-		aof.m.stats.FinishesDur.Add(elapsed)
+
+		// Truncate
+		path := f.Name()
+		aof.err = syscall.Truncate(path, finalSize)
+		elapsed = stopwatch.Stop()
+		aof.m.stats.Truncates.Incr()
+		aof.m.stats.TruncatesDur.Add(elapsed)
 		if aof.err != nil {
-			aof.m.stats.FinishErrors.Incr()
-			aof.m.stats.FinishErrorsDur.Add(elapsed)
+			aof.m.stats.TruncateErrors.Incr()
+			aof.m.stats.TruncateErrorsDur.Add(elapsed)
+		}
+
+		// Modify permissions to read-only
+		aof.err = aof.f.Chmod(aof.m.readMode)
+		elapsed = stopwatch.Stop()
+		aof.m.stats.Chmods.Incr()
+		aof.m.stats.ChmodsDur.Add(elapsed)
+		if aof.err != nil {
+			aof.m.stats.ChmodErrors.Incr()
+			aof.m.stats.ChmodErrorsDur.Add(elapsed)
+			logger.WarnErr(aof.err, "error when chmod %s to read-only", path)
+		}
+
+		if aof.err != nil {
 			return aof.err
 		}
 	}
@@ -82,6 +115,8 @@ func (aof *AOF) Wake() error {
 }
 
 func (aof *AOF) Flush() error {
+	aof.writeMu.Lock()
+	defer aof.writeMu.Unlock()
 	data := aof.data
 	if len(data) == 0 {
 		return nil
@@ -90,8 +125,11 @@ func (aof *AOF) Flush() error {
 		return nil
 	}
 	aof.flushSize = aof.size
+	if aof.f == nil {
+		return nil
+	}
 	begin := timex.NanoTime()
-	err := data.Flush()
+	err := data.FlushAsync()
 	elapsed := timex.NanoTime() - begin
 	aof.m.stats.Flushes.Incr()
 	aof.m.stats.FlushesDur.Add(elapsed)
@@ -110,14 +148,19 @@ func (aof *AOF) flush() error {
 	if aof.flushSize == aof.size {
 		return nil
 	}
-	return data.Flush()
+	return data.FlushAsync()
 }
 
 func (aof *AOF) Sync() error {
+	aof.writeMu.Lock()
+	defer aof.writeMu.Unlock()
 	if aof.syncSize == aof.size {
 		return nil
 	}
 	aof.syncSize = aof.size
+	if aof.f == nil {
+		return nil
+	}
 	begin := timex.NanoTime()
 	err := aof.sync()
 	elapsed := timex.NanoTime() - begin
@@ -135,11 +178,14 @@ func (aof *AOF) sync() error {
 		return nil
 	}
 	aof.syncSize = aof.size
-	err := aof.flush()
-	if err != nil {
-		_ = aof.f.Sync()
-		return err
+	if aof.f == nil {
+		return nil
 	}
+	//err := aof.flush()
+	//if err != nil {
+	//	_ = aof.f.Sync()
+	//	return err
+	//}
 	return aof.f.Sync()
 }
 
@@ -174,13 +220,16 @@ func (aof *AOF) Write(b []byte) (int, error) {
 			aof.err = aof.truncate(fileSize)
 			elapsed := timex.NanoTime() - begin
 			aof.stats.blockingDur.Add(elapsed)
+			aof.m.stats.Truncates.Incr()
+			aof.m.stats.TruncatesDur.Add(elapsed)
+			aof.stats.truncDur.Add(elapsed)
+			aof.stats.truncCount.Incr()
 			if aof.err != nil {
 				aof.stats.truncErrDur.Add(elapsed)
 				aof.stats.truncErrCount.Incr()
+				aof.m.stats.TruncateErrors.Incr()
+				aof.m.stats.TruncateErrorsDur.Add(elapsed)
 				return 0, aof.err
-			} else {
-				aof.stats.truncDur.Add(elapsed)
-				aof.stats.truncCount.Incr()
 			}
 		}
 	}
@@ -194,8 +243,12 @@ func (aof *AOF) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+func (aof *AOF) Checkpoint() (int64, error) {
+	return 0, nil
+}
+
 func (aof *AOF) WriteNonBlocking(b []byte) (int, error) {
-	if aof.state.Load() != FileStateOpened {
+	if aof.state.load() != FileStateOpened {
 		return 0, os.ErrClosed
 	}
 	if aof.err != nil {
@@ -284,13 +337,16 @@ func (aof *AOF) Append(reserve int64, appendFn AppendFunc) error {
 			aof.err = aof.truncate(fileSize)
 			elapsed := timex.NanoTime() - begin
 			aof.stats.blockingDur.Add(elapsed)
+			aof.stats.truncDur.Add(elapsed)
+			aof.stats.truncCount.Incr()
+			aof.m.stats.Truncates.Incr()
+			aof.m.stats.TruncatesDur.Add(elapsed)
 			if aof.err != nil {
 				aof.stats.truncErrDur.Add(elapsed)
 				aof.stats.truncErrCount.Incr()
+				aof.m.stats.TruncateErrors.Incr()
+				aof.m.stats.TruncateErrorsDur.Add(elapsed)
 				return aof.err
-			} else {
-				aof.stats.truncDur.Add(elapsed)
-				aof.stats.truncCount.Incr()
 			}
 		}
 	}
@@ -306,7 +362,7 @@ func (aof *AOF) Append(reserve int64, appendFn AppendFunc) error {
 }
 
 func (aof *AOF) AppendNonBlocking(reserve int64, appendFn AppendFunc) error {
-	if aof.state.Load() != FileStateOpened {
+	if aof.state.load() != FileStateOpened {
 		return os.ErrClosed
 	}
 	if aof.err != nil {

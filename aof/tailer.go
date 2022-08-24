@@ -37,12 +37,13 @@ const (
 	TailerStart   TailerState = 1 // Tailer was recently spawned and waiting for first start Dequeue
 	TailerReading TailerState = 2 // Tailer is currently reading and is not at the tail yet
 	TailerTail    TailerState = 3 // Tailer has started and is now at the tail
-	TailerEOF     TailerState = 4 // Tailer parent AOF is finished the tailer goes from tail to EOF state
+	TailerEOF     TailerState = 4 // Tailer parent AOF is finished the tailer goes from tail to Checkpoint state
 	TailerClosing TailerState = 5 // Tailer is waiting for next Dequeue to close
 	TailerClosed  TailerState = 6 // Tailer is now safe to delete
 )
 
 type ReadEvent struct {
+	Time       int64
 	Tailer     *Tailer
 	Begin, End int64
 	Tail       []byte
@@ -142,7 +143,7 @@ Begin:
 	}
 
 	var (
-		fileState = t.a.state.Load()
+		fileState = t.a.state.load()
 		size      = atomic.LoadInt64(&t.a.size)
 		toState   = state
 	)
@@ -165,9 +166,11 @@ Begin:
 	}
 
 	n, err := t.pushRead(ReadEvent{
+		Time:      ctx.Time,
 		Tailer:    t,
 		Begin:     t.i,
 		End:       size,
+		Tail:      t.a.data[t.i:size],
 		contents:  t.a.data,
 		FileState: fileState,
 		EOF:       fileState == FileStateEOF,

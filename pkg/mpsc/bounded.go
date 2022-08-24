@@ -115,8 +115,8 @@ func (nr *Bounded[T]) Push(data *T) bool {
 	atomic.StorePointer(&cell.data, unsafe.Pointer(data))
 	atomic.StoreInt64(&cell.seq, pos+1)
 
-	//if nr.wakeCh != nil && nr.wake == 0 && nr.tail-nr.head == 1 {
-	if nr.wakeCh != nil && nr.wake == 0 {
+	if nr.wakeCh != nil && pos-atomic.LoadInt64(&nr.head) == 0 {
+		//if nr.wakeCh != nil && atomic.LoadInt64(&nr.wake) == 0 {
 		if atomicx.Casint64(&nr.wake, 0, 1) {
 			nr.wakeCount.Incr()
 			select {
@@ -154,8 +154,8 @@ func (nr *Bounded[T]) PushUnsafe(data unsafe.Pointer) bool {
 	atomic.StorePointer(&cell.data, data)
 	atomic.StoreInt64(&cell.seq, pos+1)
 
-	//if nr.wakeCh != nil && nr.wake == 0 && nr.tail-nr.head == 1 {
-	if nr.wakeCh != nil && nr.wake == 0 {
+	if nr.wakeCh != nil && pos-atomic.LoadInt64(&nr.head) == 0 {
+		//if nr.wakeCh != nil && atomic.LoadInt64(&nr.wake) == 0 {
 		if atomicx.Casint64(&nr.wake, 0, 1) {
 			nr.wakeCount.Incr()
 			select {

@@ -32,3 +32,7 @@ func storeInt64LE(b unsafe.Pointer, v int64) {
 func loadInt64LE(p unsafe.Pointer) int64 {
 	return atomic.LoadInt64((*int64)(p))
 }
+
+func lastByteUint64LE(v uint64) byte {
+	return (*(*[8]byte)(unsafe.Pointer(&v)))[7]
+}

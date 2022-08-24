@@ -2,10 +2,11 @@ package reactor
 
 import (
 	"errors"
+	"github.com/moontrade/wormhole/pkg/atomicx"
 	"github.com/moontrade/wormhole/pkg/counter"
 	"github.com/moontrade/wormhole/pkg/spinlock"
 	"os"
-	"sync"
+	"runtime"
 	"time"
 )
 
@@ -18,14 +19,25 @@ type FutureTask interface {
 }
 
 type TaskSet struct {
-	slots       *WakeLists
-	numReactors counter.Counter
-	numEntries  counter.Counter
-	numTasks    counter.Counter
-	numFuncs    counter.Counter
-	onEmpty     func()
-	mu          spinlock.Mutex
-	closed      bool
+	slots               *WakeLists
+	numReactors         counter.Counter
+	numEntries          counter.Counter
+	numTasks            counter.Counter
+	numFuncs            counter.Counter
+	onEmpty             func()
+	now                 counter.Counter
+	lastWakeLatency     counter.Counter
+	lastSoftWakeLatency counter.Counter
+	mu                  spinlock.Mutex
+	closed              bool
+}
+
+func (tl *TaskSet) LastWakeLatency() int64 {
+	return tl.lastWakeLatency.Load()
+}
+
+func (tl *TaskSet) LastSoftWakeLatency() int64 {
+	return tl.lastSoftWakeLatency.Load()
 }
 
 func (tl *TaskSet) IsEmpty() bool { return tl.numEntries == 0 }
@@ -50,14 +62,14 @@ func (tl *TaskSet) Release() bool {
 
 func (tl *TaskSet) decrTasks() {
 	tl.numTasks.Decr()
-	if tl.numEntries.Decr() == 0 && tl.IsEmpty() {
+	if tl.numEntries.Decr() == 0 && tl.IsEmpty() && tl.onEmpty != nil {
 		tl.onEmpty()
 	}
 }
 
 func (tl *TaskSet) decrFuncs() {
 	tl.numFuncs.Decr()
-	if tl.numEntries.Decr() == 0 && tl.IsEmpty() {
+	if tl.numEntries.Decr() == 0 && tl.IsEmpty() && tl.onEmpty != nil {
 		tl.onEmpty()
 	}
 }
@@ -77,7 +89,9 @@ func (tl *TaskSet) Stop() int64 {
 func (tl *TaskSet) Wake() error {
 	slots := tl.slots.slots
 	for i := 0; i < len(slots); i++ {
-		_ = slots[i].reactor.WakeList(slots[i])
+		for !slots[i].wake() {
+			runtime.Gosched()
+		}
 	}
 	return nil
 }
@@ -219,8 +233,10 @@ type WakeList struct {
 	closed    int64
 	fn        func(slot *TaskSlot) bool
 	running   int64
-	mu        sync.Mutex
-	runMu     sync.Mutex
+	isWaking  int64
+	lastWake  int64
+	mu        spinlock.Mutex
+	runMu     spinlock.Mutex
 }
 
 func (w *WakeList) init(owner *TaskSet) {
@@ -230,6 +246,46 @@ func (w *WakeList) init(owner *TaskSet) {
 	w.size = 0
 	w.version = 0
 	w.running = 0
+	w.isWaking = 0
+}
+
+func (w *WakeList) onWake(now int64) int64 {
+	more := atomicx.Loadint64(&w.isWaking)
+	if more == 0 {
+		return 0
+	}
+	atomicx.Xaddint64(&w.isWaking, -more)
+	return more
+	//atomic.StoreInt64(&w.isWaking, 0)
+	//atomic.StoreInt64(&w.lastWake, now)
+}
+
+func (w *WakeList) wake() bool {
+	wakes := atomicx.Xaddint64(&w.isWaking, 1)
+	if wakes > 1 {
+		return true
+		//runtime.Gosched()
+		//return true
+		//if wakes > 2 {
+		//	return true
+		//}
+	}
+	r := w.reactor
+	if r != nil {
+		err := r.wakeList(w)
+		if err != nil {
+			//runtime.Gosched()
+			err = r.wakeList(w)
+			if err != nil {
+				if wakes > 1 {
+					runtime.Gosched()
+					return true
+				}
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (w *WakeList) Reactor() *Reactor { return w.reactor }
@@ -506,8 +562,8 @@ func (s *TaskSwapSlice) wake(now int64, fn func(slot *TaskSlot)) int64 {
 		count = 0
 		slot  *TaskSlot
 	)
-	for ; count < len(s.slots); count++ {
-		slot = s.slots[count]
+	for i := 0; i < len(s.slots); i++ {
+		slot = s.slots[i]
 		if slot == nil {
 			continue
 		}
@@ -595,7 +651,7 @@ func (s *FuncSwapSlice) wake(now int64, fn func(slot *FuncSlot)) int64 {
 		count = 0
 		slot  *FuncSlot
 	)
-	for ; count < len(s.slots); count++ {
+	for i := 0; i < len(s.slots); i++ {
 		slot = s.slots[count]
 		if slot == nil {
 			continue

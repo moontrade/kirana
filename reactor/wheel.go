@@ -109,6 +109,9 @@ var (
 		time.Millisecond * 500,
 		time.Millisecond * 750,
 	}}
+	Millis500 = Cadence{Durations: []time.Duration{
+		time.Millisecond * 500,
+	}}
 	Seconds = Cadence{Durations: []time.Duration{
 		time.Second,
 		time.Second * 2,

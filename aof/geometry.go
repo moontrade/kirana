@@ -19,6 +19,18 @@ type Geometry struct {
 	Create     bool
 }
 
+func (g Geometry) With(sizeNow, sizeUpper, growthStep int64) Geometry {
+	g.SizeNow = sizeNow
+	g.SizeUpper = sizeUpper
+	g.GrowthStep = growthStep
+	return g
+}
+
+func (g Geometry) WithSizeNow(sizeNow int64) Geometry {
+	g.SizeNow = sizeNow
+	return g
+}
+
 func (g *Geometry) Validate() {
 	if g.SizeNow < pageSize {
 		g.SizeNow = pageSize

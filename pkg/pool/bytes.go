@@ -53,7 +53,9 @@ type ByteSlices struct {
 }
 
 func NewByteSlices(sizes *SizeClasses) *ByteSlices {
-	return &ByteSlices{s: NewSlices[byte](nil, sizes)}
+	return &ByteSlices{s: NewSlices[byte](&Config[[]byte]{
+		//ShardFunc: ShardByGoroutineID,
+	}, sizes)}
 }
 
 func (b *ByteSlices) Alloc(size int) []byte {

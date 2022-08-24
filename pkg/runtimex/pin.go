@@ -15,6 +15,7 @@
 package runtimex
 
 import (
+	"github.com/moontrade/wormhole/pkg/gid"
 	_ "unsafe"
 )
 
@@ -39,7 +40,8 @@ func Unpin() {
 
 // Pid returns the id of current p.
 func Pid() (id int) {
-	id = runtime_procPin()
-	runtime_procUnpin()
-	return
+	return int(gid.PID())
+	//id = runtime_procPin()
+	//runtime_procUnpin()
+	//return
 }

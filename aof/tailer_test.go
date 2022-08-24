@@ -1,63 +1,140 @@
 package aof
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/moontrade/wormhole/pkg/atomicx"
+	"github.com/moontrade/wormhole/pkg/timex"
 	"github.com/moontrade/wormhole/reactor"
+	"math"
+	"os"
+	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 func init() {
-	reactor.Init(1, reactor.Millis250, 8192, 8192)
+	reactor.Init(1, reactor.Millis250, 8192*8, 8192)
 }
 
+var timer int64
+
 func TestTailer(t *testing.T) {
-	//u, err := uid.CryptoU64()
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
-	//b := make([]byte, 8)
-	//binary.LittleEndian.PutUint64(b, u)
-	//fmt.Println(b)
-	m, err := NewManager("testdata", 0755)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f, err := m.Open("db.txt", OpenFile, RecoveryDefault)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tailer, err := f.Subscribe(&Reader{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = tailer
+	//debug.SetMemoryLimit(1024 * 1024 * 1024 * 4)
 
-	for {
-		time.Sleep(time.Second)
-		_, _ = f.Write([]byte{'a', 'b', 'c', 'd'})
-		_ = f.Flush()
+	//runtime.LockOSThread()
 
-		err = f.Finish()
+	m, err := NewManager("testdata", 0755, 0444)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buf := []byte{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5'}
+
+	for x := 0; x < 100; x++ {
+		name := fmt.Sprintf("db-%d.txt", x)
+		os.Remove("testdata/" + name)
+
+		const SIZE = 1024 * 1024 * 1
+		f, err := m.Open(name, CreateFile.WithSizeNow(SIZE*2), RecoveryDefault)
 		if err != nil {
 			t.Fatal(err)
 		}
+		reader := &Reader{AOF: f, log: make([]int64, 0, 32768)}
+		tailer, err := f.Subscribe(reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = tailer
+		f.Wake()
+		time.Sleep(time.Millisecond)
+		wakeAttempts := 0
+		if f.readOnly {
+			time.Sleep(time.Second)
+		} else {
 
-		fmt.Println(m.stats)
-		break
+			last := timex.NanoTime()
+			atomic.StoreInt64(&timer, last)
+			for {
+				//time.Sleep(time.Microsecond * 50)
+				next := timex.NanoTime()
+				atomic.StoreInt64(&timer, next)
+				_, _ = f.Write(buf)
+				wakeAttempts++
+
+				if f.size >= SIZE-32 {
+					//runtime.Gosched()
+					break
+				}
+
+				//runtime.Gosched()
+
+				if f.size%(1024*1024) == 0 {
+					//runtime.Gosched()
+					//f.Flush()
+					//f.Sync()
+					//fmt.Println(toJson(m.stats))
+				}
+			}
+		}
+
+		atomicx.Casint64(&timer, 0, timex.NanoTime())
+
+		for len(reader.log) == 0 {
+			runtime.Gosched()
+		}
+		//f.Close()
+		//fmt.Println("done writing", atomic.LoadInt64(&f.size))
+
+		//time.Sleep(time.Millisecond * 500)
+		printLatency(wakeAttempts, reader.log)
 	}
+}
 
-	f.Close()
+func printLatency(attempts int, l []int64) {
+	var (
+		sum int64
+		min int64 = math.MaxInt
+		max int64
+	)
+	for _, latency := range l {
+		sum += latency
+		if latency < min {
+			min = latency
+		}
+		if latency > max {
+			max = latency
+		}
+	}
+	fmt.Println("Wake Attempts", attempts, "Wakes", len(l), "Min", time.Duration(min), "Max", time.Duration(max), "Avg", div(time.Duration(sum), time.Duration(len(l))))
+}
 
-	time.Sleep(time.Hour)
+func div(a, b time.Duration) time.Duration {
+	if a == 0 || b == 0 {
+		return 0
+	}
+	return a / b
 }
 
 type Reader struct {
+	*AOF
 	Consumer
+	last int64
+	log  []int64
 }
 
 func (r *Reader) PollRead(event ReadEvent) (int64, error) {
-	fmt.Println("read:", event.Begin, event.End, event.EOF)
+	started := atomic.LoadInt64(&timer)
+	r.last = started
+	next := timex.NanoTime()
+	//for started == 0 {
+	//	started = atomicx.Xchgint64(&timer, 0)
+	//}
+	elapsed := next - started
+	//elapsed := event.Time - started
+	r.log = append(r.log, elapsed)
+	//fmt.Println("GID", gid.GID(), "PID", gid.PID(), "read:", event.Begin, event.End, event.EOF, " since write:", time.Duration(elapsed))
 	if event.EOF {
 		return 0, reactor.ErrStop
 	}
@@ -66,4 +143,12 @@ func (r *Reader) PollRead(event ReadEvent) (int64, error) {
 
 func (r *Reader) PollReadClosed(reason error) {
 	fmt.Println("reader closed", reason)
+}
+
+func toJson(v any) string {
+	d, err := json.MarshalIndent(v, "", "   ")
+	if err != nil {
+		panic(err)
+	}
+	return string(d)
 }

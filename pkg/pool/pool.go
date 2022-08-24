@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/moontrade/wormhole/pkg/atomicx"
 	"github.com/moontrade/wormhole/pkg/counter"
+	"github.com/moontrade/wormhole/pkg/gid"
 	"github.com/moontrade/wormhole/pkg/mpmc"
 	"github.com/moontrade/wormhole/pkg/pmath"
 	"github.com/moontrade/wormhole/pkg/runtimex"
@@ -20,7 +21,9 @@ var (
 
 type ShardFunc func() int
 
-func ShardByProcessor() int { return runtimex.Pid() }
+func ShardByProcessor() int { return int(gid.PID()) }
+
+func ShardByGoroutineID() int { return int(gid.GID()) }
 
 type AllocFunc[T any] func() unsafe.Pointer
 

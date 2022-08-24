@@ -56,13 +56,18 @@ type Stats struct {
 	TruncatesDur          TimeCounter
 	TruncateErrors        Counter
 	TruncateErrorsDur     TimeCounter
+	Chmods                Counter
+	ChmodsDur             TimeCounter
+	ChmodErrors           Counter
+	ChmodErrorsDur        TimeCounter
 }
 
 type Manager struct {
 	dir       string
 	absDir    string
 	stats     Stats
-	perm      os.FileMode
+	writeMode os.FileMode
+	readMode  os.FileMode
 	closing   int64
 	closed    int64
 	isClosed  bool
@@ -76,15 +81,18 @@ func (m *Manager) Stats() Stats {
 	return m.stats
 }
 
-func NewManager(dir string, perm os.FileMode) (*Manager, error) {
-	if perm == 0 {
-		perm = 0755
+func NewManager(dir string, writeMode, readMode os.FileMode) (*Manager, error) {
+	if writeMode == 0 {
+		writeMode = 0600
+	}
+	if readMode == 0 {
+		readMode = 0444
 	}
 	if len(dir) > 0 {
 		info, err := os.Stat(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
-				err = os.MkdirAll(dir, perm)
+				err = os.MkdirAll(dir, writeMode)
 				if err != nil {
 					return nil, err
 				}
@@ -100,7 +108,8 @@ func NewManager(dir string, perm os.FileMode) (*Manager, error) {
 	}
 	m := &Manager{
 		dir:       dir,
-		perm:      perm,
+		writeMode: writeMode,
+		readMode:  readMode,
 		files:     hashmap.NewSync[string, *AOF](1024, 1024, hashmap.HashString),
 		gcList:    swap.NewSync[*AOF](getGCIndex, setGCIndex),
 		flushList: swap.NewSync[*AOF](getFlushIndex, setFlushIndex),

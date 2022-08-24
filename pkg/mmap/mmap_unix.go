@@ -8,6 +8,7 @@ import (
 )
 
 func mmap(len int, inprot, inflags, fd uintptr, off int64) ([]byte, error) {
+	//flags := unix.MAP_PRIVATE
 	flags := unix.MAP_SHARED
 	prot := unix.PROT_READ
 	switch {
@@ -38,6 +39,10 @@ func mmap(len int, inprot, inflags, fd uintptr, off int64) ([]byte, error) {
 
 func (m MMap) flush() error {
 	return unix.Msync(m, unix.MS_SYNC)
+}
+
+func (m MMap) flushAsync() error {
+	return unix.Msync(m, unix.MS_ASYNC)
 }
 
 func (m MMap) lock() error {
