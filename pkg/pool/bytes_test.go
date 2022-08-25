@@ -1,10 +1,10 @@
 package pool
 
 import (
-	"github.com/moontrade/wormhole/pkg/fastrand"
-	"github.com/moontrade/wormhole/pkg/pmath"
-	"github.com/moontrade/wormhole/pkg/syncx"
-	"github.com/moontrade/wormhole/pkg/util"
+	"github.com/moontrade/kirana/pkg/fastrand"
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/syncx"
+	"github.com/moontrade/kirana/pkg/util"
 	"sync"
 	"testing"
 )

@@ -16,7 +16,7 @@ package syncx
 
 import (
 	"fmt"
-	"github.com/moontrade/wormhole/pkg/fastrand"
+	"github.com/moontrade/kirana/pkg/fastrand"
 	"sync"
 	"testing"
 )

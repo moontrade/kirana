@@ -3,7 +3,7 @@ package aof
 import (
 	"fmt"
 	"github.com/bytedance/gopkg/lang/fastrand"
-	"github.com/moontrade/wormhole/pkg/uid"
+	"github.com/moontrade/kirana/pkg/uid"
 	"github.com/pidato/unsafe/memory/hash"
 	"testing"
 )

@@ -1,8 +1,8 @@
 package hashmap
 
 import (
-	"github.com/moontrade/wormhole/pkg/pmath"
-	"github.com/moontrade/wormhole/pkg/spinlock"
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/spinlock"
 	"runtime"
 )
 

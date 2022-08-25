@@ -2,8 +2,8 @@ package reactor
 
 import (
 	"fmt"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/timex"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/timex"
 	"runtime"
 	"sync"
 	"testing"

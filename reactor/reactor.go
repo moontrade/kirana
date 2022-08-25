@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bytedance/gopkg/util/gopool"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/gid"
+	"github.com/moontrade/kirana/pkg/hashmap"
+	"github.com/moontrade/kirana/pkg/mpsc"
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/runtimex"
+	"github.com/moontrade/kirana/pkg/timex"
+	"github.com/moontrade/kirana/pkg/util"
 	logger "github.com/moontrade/log"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/gid"
-	"github.com/moontrade/wormhole/pkg/hashmap"
-	"github.com/moontrade/wormhole/pkg/mpsc"
-	"github.com/moontrade/wormhole/pkg/pmath"
-	"github.com/moontrade/wormhole/pkg/runtimex"
-	"github.com/moontrade/wormhole/pkg/timex"
-	"github.com/moontrade/wormhole/pkg/util"
 	"github.com/panjf2000/ants"
 	"math"
 	"runtime"
@@ -69,13 +69,6 @@ const (
 	DefaultSpawnQueueSize  = 1024 * 1
 )
 
-type Tick struct {
-	Time      int64
-	Tick      int64
-	Dur       time.Duration
-	Precision time.Duration
-}
-
 type Config struct {
 	Name         string
 	Level1Wheel  Wheel
@@ -120,7 +113,7 @@ type Reactor struct {
 	cancel         context.CancelFunc
 	tickCount      counter.Counter
 	nextTick       counter.Counter
-	wakeCh         chan int
+	wakeCh         chan int64
 	pid            int32
 	gid            int64
 	lockOSThread   bool
@@ -160,7 +153,7 @@ func NewReactor(config Config) (*Reactor, error) {
 		return nil, fmt.Errorf("minutes Tick not evenly divisible by millisecond Tick: %s mod %s = %s",
 			config.Level3Wheel.tickDur, config.Level1Wheel.tickDur, config.Level3Wheel.tickDur%config.Level1Wheel.tickDur)
 	}
-	wakeCh := make(chan int, 1)
+	wakeCh := make(chan int64, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &Reactor{
 		tickDur:        config.Level1Wheel.tickDur,
@@ -335,69 +328,58 @@ func (r *Reactor) run() {
 			logger.Error(util.PanicToError(e))
 		}
 	}()
+	if r.lockOSThread {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+	}
 
 	r.pid = gid.PID()
 	r.gid = gid.GID()
 	var (
-		invokeQ = r.invokeQ
-		//invokeQWake   = invokeQ.Wake()
-		wakeQ = r.wakeQ
-		//wakeQWake     = wakeQ.Wake()
+		invokeQ   = r.invokeQ
+		wakeQ     = r.wakeQ
 		wakeListQ = r.wakeListQ
-		//wakeListQWake = wakeListQ.Wake()
-		spawnQ = r.spawnQ
-		//spawnQWake    = spawnQ.Wake()
-		//now         = timex.NanoTime()
-		//pid = r.pid
-		//nextPid = pid
+		spawnQ    = r.spawnQ
 	)
 
-	//checkLoopPid := func() {
-	//	//nextPid = gid.PID() // runtimex.Pid()
-	//	//if nextPid != pid {
-	//	//	logger.Debug("loop pid changed from %d to %d between iterations", pid, nextPid)
-	//	//}
-	//	//pid = nextPid
-	//}
-
-	checkPid := func() {
-		//nextPid = gid.PID() //runtimex.Pid()
-		//if nextPid != pid {
-		//	logger.Warn("loop pid changed from %d to %d during loop execution", pid, nextPid)
-		//}
-		//pid = nextPid
+	tick, err := ticker.Register(r.tickDur, r, r.wakeCh)
+	if err != nil {
+		panic(err)
 	}
-
-	r.nextTick.Store(timex.NanoTime() + int64(r.tickDur))
-	tickMsg := Tick{}
-
-	go func() {
-		interval := int64(r.tickDur)
-	Loop:
-		for {
-			begin := timex.NanoTime()
-			time.Sleep(time.Duration(r.nextTick.Load() - begin))
-
-			t := r.nextTick.Load()
-			tickMsg.Tick = r.currentTick.Incr()
-			tickMsg.Time = t
-			//tick := r.currentTick.Incr()
-			r.nextTick.Add(interval)
-
-			select {
-			case r.wakeCh <- int(t):
-			//case r.timer <- Tick{
-			//	Time: t,
-			//	Tick: tick,
-			//}:
-			// caught up
-			case <-r.ctx.Done():
-				break Loop
-			default:
-				// behind
-			}
-		}
+	defer func() {
+		_ = tick.Close()
 	}()
+
+	//r.nextTick.Store(timex.NanoTime() + int64(r.tickDur))
+	//tickMsg := Tick{}
+	//
+	//go func() {
+	//	interval := int64(r.tickDur)
+	//Loop:
+	//	for {
+	//		begin := timex.NanoTime()
+	//		time.Sleep(time.Duration(r.nextTick.Load() - begin))
+	//
+	//		t := r.nextTick.Load()
+	//		tickMsg.Tick = r.currentTick.Incr()
+	//		tickMsg.Time = t
+	//		//tick := r.currentTick.Incr()
+	//		r.nextTick.Add(interval)
+	//
+	//		select {
+	//		case r.wakeCh <- t:
+	//		//case r.timer <- Tick{
+	//		//	Time: t,
+	//		//	Tick: tick,
+	//		//}:
+	//		// caught up
+	//		case <-r.ctx.Done():
+	//			break Loop
+	//		default:
+	//			// behind
+	//		}
+	//	}
+	//}()
 
 	onSpawn := func(task *Task) {
 		r.pollStart(r.now, task)
@@ -440,15 +422,13 @@ func (r *Reactor) run() {
 		return total
 	}
 
-	onTick := func(msg Tick) {
+	processTick := func(tick int64) {
 		interval := int64(r.tickDur)
 		start := timex.NanoTime()
 		begin := start
-		r.tick(msg, begin)
+		r.tick(tick, begin)
 		end := timex.NanoTime()
 		elapsed := end - begin
-
-		checkPid()
 
 		// Stats
 		r.ticks.Incr()
@@ -470,55 +450,34 @@ func (r *Reactor) run() {
 		if elapsed > interval {
 			r.skew.Incr()
 			r.skewDur.Add(elapsed)
-
 			r.rebalance()
 		}
 	}
 
-	if r.lockOSThread {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-	}
-
 	var (
-		_            = wakeListQ
-		_            = wakeQ
-		_            = onTick
-		backoffCount = 0
-		microTimer   = time.NewTimer(time.Microsecond * 50)
-		wakeCh       = r.wakeCh
-		_            = wakeCh
-		_            = backoffCount
-		_            = microTimer
-		//tickLn       = r.tickLn
-		//tick         = tickLn.next
+		//backoffCount = 0
+		//microTimer   = time.NewTimer(time.Microsecond * 50)
+		//_           = backoffCount
+		//_           = microTimer
+		wakeCh      = r.wakeCh
+		lastTick    = int64(0)
+		currentTick = int64(0)
 	)
-	//Loop:
 	for {
-		//time.Sleep(time.Microsecond)
-		//if false {
 		select {
-
-		//case msg := <-r.timer:
-		//	//checkLoopPid()
-		//	if lastTick < msg.Tick-1 {
-		//		r.catchup(lastTick, msg.Tick)
-		//	}
-		//	lastTick = msg.Tick
-		//	onTick(msg)
-		//flushQueues()
-		//checkPid()
-		//
-		case <-wakeCh:
+		case v := <-wakeCh:
+			if v > 0 {
+				currentTick = v
+				if lastTick < v-1 {
+					r.catchup(lastTick, currentTick)
+				}
+				lastTick = currentTick
+				processTick(currentTick)
+				continue
+			}
 			r.now = timex.NanoTime()
 			flushQueues()
-
-			//default:
-			//	time.Sleep(time.Microsecond * 50)
-			//	//runtime.Gosched()
-			//	flushQueues()
 		}
-		//}
 	}
 }
 
@@ -526,12 +485,9 @@ func (r *Reactor) catchup(lastTick, currentTick int64) {
 	logger.Warn("skew detected of %d ticks", currentTick-1-lastTick)
 	logger.Warn("catching up...")
 
+	now := timex.NanoTime()
 	for nextTick := lastTick + 1; nextTick <= currentTick; nextTick++ {
-		now := timex.NanoTime()
-		r.tick(Tick{
-			Time: now,
-			Tick: nextTick,
-		}, now)
+		r.tick(nextTick, now)
 	}
 }
 
@@ -540,13 +496,13 @@ func (r *Reactor) rebalance() {
 	//logger.Warn("rebalanced")
 }
 
-func (r *Reactor) tick(msg Tick, now int64) {
+func (r *Reactor) tick(tick int64, now int64) {
 	r.tickWheel.tick(now, r.onTick)
-	if msg.Tick%r.ticksPerLevel2 == 0 {
+	if tick%r.ticksPerLevel2 == 0 {
 		//logger.Debug("level 2 wheel Tick")
 		r.level2Wheel.tick(now, r.onTick)
 	}
-	if msg.Tick%r.ticksPerLevel3 == 0 {
+	if tick%r.ticksPerLevel3 == 0 {
 		//logger.Debug("level 3 wheel Tick")
 		r.level3Wheel.tick(now, r.onTick)
 	}

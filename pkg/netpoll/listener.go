@@ -2,7 +2,7 @@ package netpoll
 
 import (
 	reuseport "github.com/kavu/go_reuseport"
-	"github.com/moontrade/wormhole/pkg/socket"
+	"github.com/moontrade/kirana/pkg/socket"
 	"net"
 	"os"
 	"sync"

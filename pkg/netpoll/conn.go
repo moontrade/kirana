@@ -1,7 +1,7 @@
 package netpoll
 
 import (
-	"github.com/moontrade/wormhole/pkg/socket"
+	"github.com/moontrade/kirana/pkg/socket"
 	"golang.org/x/sys/unix"
 	"net"
 )

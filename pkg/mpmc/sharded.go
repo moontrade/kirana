@@ -1,8 +1,8 @@
 package mpmc
 
 import (
-	"github.com/moontrade/wormhole/pkg/pmath"
-	"github.com/moontrade/wormhole/pkg/runtimex"
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/runtimex"
 	"unsafe"
 )
 

@@ -17,8 +17,8 @@ package skipmap
 import (
 	_ "unsafe" // for linkname
 
-	"github.com/moontrade/wormhole/pkg/fastrand"
-	"github.com/moontrade/wormhole/pkg/wyhash"
+	"github.com/moontrade/kirana/pkg/fastrand"
+	"github.com/moontrade/kirana/pkg/wyhash"
 )
 
 const (

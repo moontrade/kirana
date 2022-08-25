@@ -19,7 +19,7 @@ import (
 	"math/bits"
 	"unsafe"
 
-	"github.com/moontrade/wormhole/pkg/runtimex"
+	"github.com/moontrade/kirana/pkg/runtimex"
 )
 
 // Uint32 returns a pseudo-random 32-bit value as a uint32.

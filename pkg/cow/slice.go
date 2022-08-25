@@ -1,7 +1,7 @@
 package cow
 
 import (
-	"github.com/moontrade/wormhole/pkg/spinlock"
+	"github.com/moontrade/kirana/pkg/spinlock"
 )
 
 type Slice[E any] struct {

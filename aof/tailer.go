@@ -2,10 +2,10 @@ package aof
 
 import (
 	"errors"
+	"github.com/moontrade/kirana/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/util"
+	"github.com/moontrade/kirana/reactor"
 	logger "github.com/moontrade/log"
-	"github.com/moontrade/wormhole/pkg/atomicx"
-	"github.com/moontrade/wormhole/pkg/util"
-	"github.com/moontrade/wormhole/reactor"
 	"os"
 	"sync"
 	"sync/atomic"

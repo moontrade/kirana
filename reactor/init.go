@@ -1,9 +1,9 @@
 package reactor
 
 import (
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/cow"
-	"github.com/moontrade/wormhole/pkg/runtimex"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/cow"
+	"github.com/moontrade/kirana/pkg/runtimex"
 	"runtime"
 	"strconv"
 )

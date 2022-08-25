@@ -1,10 +1,10 @@
 package mpsc
 
 import (
-	"github.com/moontrade/wormhole/pkg/atomicx"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/pmath"
-	"github.com/moontrade/wormhole/pkg/pool"
+	"github.com/moontrade/kirana/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/pool"
 )
 
 type Pager[T any] struct {
@@ -14,10 +14,10 @@ type Pager[T any] struct {
 	backlog   *Bounded[Bounded[T]]
 	pool      *pool.Pool[Bounded[T]]
 	allocates counter.Counter
-	wake      chan int
+	wake      chan int64
 }
 
-func NewPager[T any](pageSize, maxPages int64, wake chan int) *Pager[T] {
+func NewPager[T any](pageSize, maxPages int64, wake chan int64) *Pager[T] {
 	if pageSize < 4 {
 		pageSize = 4
 	}

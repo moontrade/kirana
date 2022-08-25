@@ -1,9 +1,9 @@
 package mpmc
 
 import (
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/runtimex"
-	"github.com/moontrade/wormhole/pkg/timex"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/runtimex"
+	"github.com/moontrade/kirana/pkg/timex"
 	"math"
 	"runtime"
 	"sync"

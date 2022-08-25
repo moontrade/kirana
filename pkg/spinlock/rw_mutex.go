@@ -1,7 +1,7 @@
 package spinlock
 
 import (
-	"github.com/moontrade/wormhole/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/atomicx"
 	"runtime"
 	"sync"
 	"sync/atomic"

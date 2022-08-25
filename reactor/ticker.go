@@ -2,17 +2,24 @@ package reactor
 
 import (
 	"errors"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/cow"
+	"github.com/moontrade/kirana/pkg/timex"
+	"github.com/moontrade/kirana/pkg/util"
 	logger "github.com/moontrade/log"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/cow"
-	"github.com/moontrade/wormhole/pkg/timex"
-	"github.com/moontrade/wormhole/pkg/util"
 	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+type Tick struct {
+	Time      int64
+	Tick      int64
+	Dur       time.Duration
+	Precision time.Duration
+}
 
 type Ticker struct {
 	tick       time.Duration
@@ -48,7 +55,7 @@ func (t *Ticker) Close() error {
 	return nil
 }
 
-func (t *Ticker) Register(duration time.Duration, owner interface{}, ch chan int) (*TickListener, error) {
+func (t *Ticker) Register(duration time.Duration, owner interface{}, ch chan int64) (*TickListener, error) {
 	ln, err := newTickListener(t, duration, owner, ch)
 	if err != nil {
 		return nil, err
@@ -151,7 +158,8 @@ func (t *Ticker) run() {
 type TickListener struct {
 	ticker        *Ticker
 	owner         interface{}
-	ch            chan int
+	ch            chan int64
+	chOwned       bool
 	dur           time.Duration
 	last          int64
 	total         int64
@@ -162,7 +170,7 @@ type TickListener struct {
 	mu            sync.Mutex
 }
 
-func (tl *TickListener) Chan() <-chan int {
+func (tl *TickListener) Chan() <-chan int64 {
 	return tl.ch
 }
 
@@ -174,7 +182,9 @@ func (tl *TickListener) Close() error {
 	}
 
 	tl.ticker.remove(tl)
-	close(tl.ch)
+	if tl.chOwned {
+		close(tl.ch)
+	}
 	tl.ch = nil
 	tl.ticker = nil
 	return nil
@@ -184,20 +194,23 @@ func newTickListener(
 	ticker *Ticker,
 	duration time.Duration,
 	owner interface{},
-	ch chan int,
+	ch chan int64,
 ) (*TickListener, error) {
 	if duration <= 0 {
 		return nil, errors.New("duration must be positive")
 	}
+	chOwned := false
 	if ch == nil {
-		return nil, errors.New("chan is nil")
+		ch = make(chan int64, 1)
+		chOwned = true
 	}
 	return &TickListener{
-		ticker: ticker,
-		owner:  owner,
-		ch:     ch,
-		dur:    duration,
-		next:   Tick{Dur: duration},
+		ticker:  ticker,
+		owner:   owner,
+		ch:      ch,
+		chOwned: chOwned,
+		dur:     duration,
+		next:    Tick{Dur: duration},
 	}, nil
 }
 
@@ -237,7 +250,7 @@ func (tl *TickListener) doNotify() {
 		}
 	}()
 	select {
-	case tl.ch <- int(tl.next.Time):
+	case tl.ch <- tl.next.Tick:
 		tl.notifySuccess++
 	default:
 		tl.notifyFails++

@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/moontrade/wormhole/pkg/fastrand"
+	"github.com/moontrade/kirana/pkg/fastrand"
 )
 
 func TestSkipMap(t *testing.T) {

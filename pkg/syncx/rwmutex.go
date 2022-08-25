@@ -19,7 +19,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/moontrade/wormhole/pkg/runtimex"
+	"github.com/moontrade/kirana/pkg/runtimex"
 
 	"golang.org/x/sys/cpu"
 )

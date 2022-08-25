@@ -1,9 +1,9 @@
 package mpsc
 
 import (
-	"github.com/moontrade/wormhole/pkg/atomicx"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/pmath"
 	"golang.org/x/sys/cpu"
 	"reflect"
 	"sync/atomic"
@@ -30,16 +30,16 @@ type Bounded[T any] struct {
 	_             [CacheLinePad - unsafe.Sizeof(reflect.SliceHeader{}) - 8]byte
 	wake          int64
 	_             [CacheLinePad - 8]byte
-	wakeCh        chan int
+	wakeCh        chan int64
 	wakeCount     counter.Counter
 	wakeFull      counter.Counter
 	overflowCount counter.Counter
 }
 
 // NewBounded returns the RingBuffer object
-func NewBounded[T any](capacity int64, wake chan int) *Bounded[T] {
+func NewBounded[T any](capacity int64, wake chan int64) *Bounded[T] {
 	if wake == nil {
-		wake = make(chan int, 1)
+		wake = make(chan int64, 1)
 	}
 	if capacity <= 32 {
 		capacity = 32
@@ -67,7 +67,7 @@ func (nr *Bounded[T]) WakeChanFullCount() int64 {
 	return nr.wakeFull.Load()
 }
 
-func (nr *Bounded[T]) Wake() <-chan int {
+func (nr *Bounded[T]) Wake() <-chan int64 {
 	return nr.wakeCh
 }
 
@@ -120,7 +120,7 @@ func (nr *Bounded[T]) Push(data *T) bool {
 		if atomicx.Casint64(&nr.wake, 0, 1) {
 			nr.wakeCount.Incr()
 			select {
-			case nr.wakeCh <- 1:
+			case nr.wakeCh <- 0:
 			default:
 				nr.wakeFull.Incr()
 			}
@@ -159,7 +159,7 @@ func (nr *Bounded[T]) PushUnsafe(data unsafe.Pointer) bool {
 		if atomicx.Casint64(&nr.wake, 0, 1) {
 			nr.wakeCount.Incr()
 			select {
-			case nr.wakeCh <- 1:
+			case nr.wakeCh <- 0:
 			default:
 				nr.wakeFull.Incr()
 			}

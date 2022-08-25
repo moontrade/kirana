@@ -2,9 +2,9 @@ package aof
 
 import (
 	"errors"
+	"github.com/moontrade/kirana/pkg/timex"
+	"github.com/moontrade/kirana/pkg/util"
 	logger "github.com/moontrade/log"
-	"github.com/moontrade/wormhole/pkg/timex"
-	"github.com/moontrade/wormhole/pkg/util"
 	"io"
 	"os"
 	"sync/atomic"

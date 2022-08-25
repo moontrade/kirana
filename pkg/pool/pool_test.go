@@ -2,10 +2,10 @@ package pool
 
 import (
 	"bytes"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/runtimex"
-	"github.com/moontrade/wormhole/pkg/syncx"
-	"github.com/moontrade/wormhole/pkg/timex"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/runtimex"
+	"github.com/moontrade/kirana/pkg/syncx"
+	"github.com/moontrade/kirana/pkg/timex"
 	"runtime"
 	"sync"
 	"testing"

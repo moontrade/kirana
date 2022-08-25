@@ -1,6 +1,6 @@
 package hashmap
 
-import "github.com/moontrade/wormhole/pkg/wyhash"
+import "github.com/moontrade/kirana/pkg/wyhash"
 
 type HasherFunc[K any] func(key K) uint64
 

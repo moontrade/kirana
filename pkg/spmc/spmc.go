@@ -1,7 +1,7 @@
 package spmc
 
 import (
-	"github.com/moontrade/wormhole/pkg/mpsc"
+	"github.com/moontrade/kirana/pkg/mpsc"
 	"sync/atomic"
 	"unsafe"
 )

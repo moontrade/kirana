@@ -1,8 +1,8 @@
 package counter
 
 import (
-	"github.com/moontrade/wormhole/pkg/atomicx"
-	"github.com/moontrade/wormhole/pkg/timex"
+	"github.com/moontrade/kirana/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/timex"
 	"sync/atomic"
 	"time"
 )

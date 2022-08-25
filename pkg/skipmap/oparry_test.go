@@ -18,7 +18,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/moontrade/wormhole/pkg/fastrand"
+	"github.com/moontrade/kirana/pkg/fastrand"
 )
 
 type dummy struct {

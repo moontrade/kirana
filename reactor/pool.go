@@ -1,8 +1,8 @@
 package reactor
 
 import (
-	"github.com/moontrade/wormhole/pkg/pmath"
-	"github.com/moontrade/wormhole/pkg/pool"
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/pool"
 	"reflect"
 	"runtime"
 	"unsafe"

@@ -3,7 +3,7 @@ package uid
 import (
 	crand "crypto/rand"
 	"encoding/binary"
-	"github.com/moontrade/wormhole/pkg/wyhash"
+	"github.com/moontrade/kirana/pkg/wyhash"
 	"math/big"
 )
 

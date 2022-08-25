@@ -2,11 +2,11 @@ package reactor
 
 import (
 	"context"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/timex"
+	"github.com/moontrade/kirana/pkg/util"
 	logger "github.com/moontrade/log"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/pmath"
-	"github.com/moontrade/wormhole/pkg/timex"
-	"github.com/moontrade/wormhole/pkg/util"
 	"sync"
 	"sync/atomic"
 	"time"

@@ -2,9 +2,9 @@ package reactor
 
 import (
 	"errors"
-	"github.com/moontrade/wormhole/pkg/atomicx"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/spinlock"
+	"github.com/moontrade/kirana/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/spinlock"
 	"os"
 	"runtime"
 	"time"

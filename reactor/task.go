@@ -1,10 +1,10 @@
 package reactor
 
 import (
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/spinlock"
+	"github.com/moontrade/kirana/pkg/util"
 	logger "github.com/moontrade/log"
-	"github.com/moontrade/wormhole/pkg/pmath"
-	"github.com/moontrade/wormhole/pkg/spinlock"
-	"github.com/moontrade/wormhole/pkg/util"
 	"time"
 	"unsafe"
 )

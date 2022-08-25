@@ -2,7 +2,7 @@ package reactor
 
 import (
 	"fmt"
-	"github.com/moontrade/wormhole/pkg/counter"
+	"github.com/moontrade/kirana/pkg/counter"
 )
 
 type SimpleTask struct {

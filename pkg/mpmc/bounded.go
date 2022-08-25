@@ -1,9 +1,9 @@
 package mpmc
 
 import (
-	"github.com/moontrade/wormhole/pkg/atomicx"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/pmath"
 	"golang.org/x/sys/cpu"
 	"reflect"
 	"runtime"

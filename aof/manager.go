@@ -2,14 +2,14 @@ package aof
 
 import (
 	"fmt"
-	"github.com/moontrade/wormhole/pkg/hashmap"
-	"github.com/moontrade/wormhole/pkg/spinlock"
-	"github.com/moontrade/wormhole/pkg/swap"
-	"github.com/moontrade/wormhole/pkg/timex"
+	"github.com/moontrade/kirana/pkg/hashmap"
+	"github.com/moontrade/kirana/pkg/spinlock"
+	"github.com/moontrade/kirana/pkg/swap"
+	"github.com/moontrade/kirana/pkg/timex"
 	"os"
 	"time"
 
-	. "github.com/moontrade/wormhole/pkg/counter"
+	. "github.com/moontrade/kirana/pkg/counter"
 )
 
 type Stats struct {

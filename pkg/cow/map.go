@@ -1,7 +1,7 @@
 package cow
 
 import (
-	"github.com/moontrade/wormhole/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/pmath"
 	"sync"
 )
 

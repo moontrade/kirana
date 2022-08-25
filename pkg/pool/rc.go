@@ -1,7 +1,7 @@
 package pool
 
 import (
-	"github.com/moontrade/wormhole/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/atomicx"
 	"strconv"
 	"unsafe"
 )

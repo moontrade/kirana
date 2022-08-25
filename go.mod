@@ -1,4 +1,4 @@
-module github.com/moontrade/wormhole
+module github.com/moontrade/kirana
 
 go 1.19
 

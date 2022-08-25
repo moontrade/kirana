@@ -15,7 +15,7 @@
 package runtimex
 
 import (
-	"github.com/moontrade/wormhole/pkg/gid"
+	"github.com/moontrade/kirana/pkg/gid"
 	_ "unsafe"
 )
 

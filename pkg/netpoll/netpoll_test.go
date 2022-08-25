@@ -2,8 +2,8 @@ package netpoll
 
 import (
 	"fmt"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/mpsc"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/mpsc"
 	"math"
 	"runtime"
 	"testing"

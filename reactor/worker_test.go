@@ -3,9 +3,9 @@ package reactor
 import (
 	"fmt"
 	"github.com/bytedance/gopkg/util/gopool"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/timex"
 	logger "github.com/moontrade/log"
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/timex"
 	"github.com/panjf2000/ants"
 	"runtime"
 	"testing"

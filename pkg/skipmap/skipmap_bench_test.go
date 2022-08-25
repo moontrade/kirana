@@ -15,15 +15,15 @@
 package skipmap
 
 import (
-	"github.com/moontrade/wormhole/pkg/hashmap"
-	"github.com/moontrade/wormhole/pkg/spinlock"
+	"github.com/moontrade/kirana/pkg/hashmap"
+	"github.com/moontrade/kirana/pkg/spinlock"
 	"math"
 	"strconv"
 	"sync"
 	"testing"
 	"unsafe"
 
-	"github.com/moontrade/wormhole/pkg/fastrand"
+	"github.com/moontrade/kirana/pkg/fastrand"
 )
 
 const initsize = 1 << 10 // for `load` `1Delete9Store90Load` `1Range9Delete90Store900Load`

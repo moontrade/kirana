@@ -1,8 +1,8 @@
 package pool
 
 import (
-	"github.com/moontrade/wormhole/pkg/counter"
-	"github.com/moontrade/wormhole/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/pmath"
 	"reflect"
 	"unsafe"
 )

@@ -5,7 +5,7 @@
 package atomicx_test
 
 import (
-	"github.com/moontrade/wormhole/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/atomicx"
 	"runtime"
 	"testing"
 	"unsafe"

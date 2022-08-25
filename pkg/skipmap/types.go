@@ -16,8 +16,8 @@
 package skipmap
 
 import (
-	"github.com/moontrade/wormhole/pkg/atomicx"
-	"github.com/moontrade/wormhole/pkg/spinlock"
+	"github.com/moontrade/kirana/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/spinlock"
 	"sync/atomic"
 	"unsafe"
 )

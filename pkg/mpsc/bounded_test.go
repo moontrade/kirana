@@ -1,7 +1,7 @@
 package mpsc
 
 import (
-	"github.com/moontrade/wormhole/pkg/counter"
+	"github.com/moontrade/kirana/pkg/counter"
 	"testing"
 )
 

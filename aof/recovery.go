@@ -3,7 +3,7 @@ package aof
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/moontrade/wormhole/pkg/util"
+	"github.com/moontrade/kirana/pkg/util"
 	"unsafe"
 )
 

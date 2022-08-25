@@ -1,7 +1,7 @@
 package swap
 
 import (
-	"github.com/moontrade/wormhole/pkg/spinlock"
+	"github.com/moontrade/kirana/pkg/spinlock"
 )
 
 type SyncSlice[T comparable] struct {
