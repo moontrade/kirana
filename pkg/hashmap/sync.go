@@ -9,10 +9,6 @@ import (
 // Sync is a thread-safe version of Map. It achieves this by sharding into "x" number of shards each
 // with a spinlock and an instance of Map. Shards are determined by key hash. The key is only ever hashed
 // once per operation. Map code is embedded only to reduce the hash operation count.
-//
-// Locking:
-// spinlock.Mutex scales much better than sync.Mutex for fast critical sections and through testing it is
-// generally better to have a simple spinlock.Mutex over a spinlock.RWMutex for these types of problems.
 type Sync[K comparable, V any] struct {
 	shards []shard[K, V]
 	mask   uint64
@@ -197,7 +193,7 @@ func (s *shard[K, V]) GetOrCreate(hash uint64, key K, supplier func(K) V) (value
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := s.m
-	m.loadCow()
+	//m.loadCow()
 	if len(m.buckets) == 0 {
 		*m = *New[K, V](0, s.hasher)
 	}
@@ -233,7 +229,7 @@ func (s *shard[K, V]) Put(hash uint64, key K, value V) (prev V, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := s.m
-	m.loadCow()
+	//m.loadCow()
 	if len(m.buckets) == 0 {
 		*m = *New[K, V](0, s.hasher)
 	}
@@ -265,7 +261,7 @@ func (s *shard[K, V]) PutIfAbsent(hash uint64, key K, value V) (prev V, exists b
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := s.m
-	m.loadCow()
+	//m.loadCow()
 	if len(m.buckets) == 0 {
 		*m = *New[K, V](0, s.hasher)
 	}
@@ -300,7 +296,7 @@ func (s *shard[K, V]) PutIf(
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := s.m
-	m.loadCow()
+	//m.loadCow()
 	if len(m.buckets) == 0 {
 		*m = *New[K, V](0, s.hasher)
 	}
@@ -338,7 +334,7 @@ func (s *shard[K, V]) Delete(hash uint64, key K) (prev V, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := s.m
-	m.loadCow()
+	//m.loadCow()
 	if len(m.buckets) == 0 {
 		return prev, false
 	}
@@ -359,9 +355,8 @@ func (s *shard[K, V]) Delete(hash uint64, key K) (prev V, ok bool) {
 func (s *shard[K, V]) DeleteIf(hash uint64, key K, condition func(existing V) bool) (prev V, deleted bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	m := s.m
-	m.loadCow()
+	//m.loadCow()
 	if len(m.buckets) == 0 {
 		return
 	}

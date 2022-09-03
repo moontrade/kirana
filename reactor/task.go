@@ -17,6 +17,10 @@ type TaskProvider struct {
 	task *Task
 }
 
+func (tp *TaskProvider) CheckGID() bool {
+	return tp.task.CheckGID()
+}
+
 func (tp *TaskProvider) Reactor() *Reactor {
 	t := tp.task
 	if t == nil {

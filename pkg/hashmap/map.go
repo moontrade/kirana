@@ -2,8 +2,8 @@
 // Use of this source code is governed by an ISC-style
 // license that can be found in the LICENSE file.
 
-// This has been slightly modified to use wyhashF3 instead of xxHash64.
-// wyhashF3 is faster and has high quality similar to xxHash64.
+// This has been slightly modified to use wyhashf3 instead of xxHash64.
+// wyhashf3 is faster and has similar quality to xxHash64.
 
 package hashmap
 

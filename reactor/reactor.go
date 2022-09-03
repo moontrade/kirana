@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/gid"
 	"github.com/moontrade/kirana/pkg/hashmap"
@@ -96,6 +95,7 @@ type Reactor struct {
 	currentTick    counter.Counter
 	idCounter      counter.Counter
 	state          int64
+	config         Config
 	wakeQ          *mpsc.Bounded[Task]
 	wakeListQ      *mpsc.Bounded[WakeList]
 	spawnQ         *mpsc.Bounded[Task]
@@ -108,7 +108,6 @@ type Reactor struct {
 	ticksPerLevel2 int64
 	ticksPerLevel3 int64
 	tasks          *hashmap.Sync[int64, *Task]
-	workerPool     gopool.Pool
 	ctx            context.Context
 	cancel         context.CancelFunc
 	tickCount      counter.Counter
@@ -116,7 +115,6 @@ type Reactor struct {
 	wakeCh         chan int64
 	pid            int32
 	gid            int64
-	lockOSThread   bool
 	wg             sync.WaitGroup
 }
 
@@ -156,6 +154,7 @@ func NewReactor(config Config) (*Reactor, error) {
 	wakeCh := make(chan int64, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &Reactor{
+		config:         config,
 		tickDur:        config.Level1Wheel.tickDur,
 		tickWheel:      config.Level1Wheel,
 		level2Wheel:    config.Level2Wheel,
@@ -169,10 +168,8 @@ func NewReactor(config Config) (*Reactor, error) {
 		spawnQ:         mpsc.NewBounded[Task](int64(config.SpawnQSize), wakeCh),
 		invokeQ:        mpsc.NewBounded[func()](int64(config.InvokeQSize), wakeCh),
 		timer:          make(chan Tick, 1),
-		workerPool:     gopool.NewPool(config.Name, 10000, nil),
 		ctx:            ctx,
 		cancel:         cancel,
-		lockOSThread:   config.LockOSThread,
 	}
 	w.id = reactors.AppendIndex(w)
 	return w, nil
@@ -328,7 +325,7 @@ func (r *Reactor) run() {
 			logger.Error(util.PanicToError(e))
 		}
 	}()
-	if r.lockOSThread {
+	if r.config.LockOSThread {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 	}
@@ -342,44 +339,13 @@ func (r *Reactor) run() {
 		spawnQ    = r.spawnQ
 	)
 
-	tick, err := ticker.Register(r.tickDur, r, r.wakeCh)
+	tick, err := initTicker(r.tickDur).Register(r.tickDur, r, r.wakeCh)
 	if err != nil {
 		panic(err)
 	}
 	defer func() {
 		_ = tick.Close()
 	}()
-
-	//r.nextTick.Store(timex.NanoTime() + int64(r.tickDur))
-	//tickMsg := Tick{}
-	//
-	//go func() {
-	//	interval := int64(r.tickDur)
-	//Loop:
-	//	for {
-	//		begin := timex.NanoTime()
-	//		time.Sleep(time.Duration(r.nextTick.Load() - begin))
-	//
-	//		t := r.nextTick.Load()
-	//		tickMsg.Tick = r.currentTick.Incr()
-	//		tickMsg.Time = t
-	//		//tick := r.currentTick.Incr()
-	//		r.nextTick.Add(interval)
-	//
-	//		select {
-	//		case r.wakeCh <- t:
-	//		//case r.timer <- Tick{
-	//		//	Time: t,
-	//		//	Tick: tick,
-	//		//}:
-	//		// caught up
-	//		case <-r.ctx.Done():
-	//			break Loop
-	//		default:
-	//			// behind
-	//		}
-	//	}
-	//}()
 
 	onSpawn := func(task *Task) {
 		r.pollStart(r.now, task)
@@ -466,7 +432,7 @@ func (r *Reactor) run() {
 	for {
 		select {
 		case v := <-wakeCh:
-			if v > 0 {
+			if v > 0 && v != lastTick {
 				currentTick = v
 				if lastTick < v-1 {
 					r.catchup(lastTick, currentTick)
@@ -499,11 +465,11 @@ func (r *Reactor) rebalance() {
 func (r *Reactor) tick(tick int64, now int64) {
 	r.tickWheel.tick(now, r.onTick)
 	if tick%r.ticksPerLevel2 == 0 {
-		//logger.Debug("level 2 wheel Tick")
+		logger.Debug("level 2 wheel Tick", tick)
 		r.level2Wheel.tick(now, r.onTick)
 	}
 	if tick%r.ticksPerLevel3 == 0 {
-		//logger.Debug("level 3 wheel Tick")
+		logger.Debug("level 3 wheel Tick")
 		r.level3Wheel.tick(now, r.onTick)
 	}
 }

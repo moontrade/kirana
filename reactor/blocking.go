@@ -25,7 +25,6 @@ func InvokeBlocking(task func()) bool {
 // fashion.
 type BlockingPool struct {
 	started     int64
-	queue       *mpsc.Bounded[func()]
 	workers     []*blockingWorker
 	workersMask int64
 	idleCount   counter.Counter
@@ -51,7 +50,6 @@ func NewBlockingPool(numWorkers, queueSize int) *BlockingPool {
 	workers := make([]*blockingWorker, numWorkers)
 	bp := &BlockingPool{
 		started: timex.NanoTime(),
-		queue:   mpsc.NewBounded[func()](int64(queueSize), nil),
 		workers: workers,
 		profile: false,
 	}

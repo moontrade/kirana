@@ -6,6 +6,8 @@ import (
 	"github.com/moontrade/kirana/pkg/runtimex"
 	"runtime"
 	"strconv"
+	"sync"
+	"time"
 )
 
 var ()
@@ -16,10 +18,21 @@ var (
 	blocking  *BlockingPool
 	reactors  cow.Slice[*Reactor]
 	loops     cow.Slice[*Reactor]
+	mu        sync.Mutex
 )
 
 func init() {
 	//runtime_registerPoolCleanup(gc)
+}
+
+func initTicker(tickDur time.Duration) *Ticker {
+	mu.Lock()
+	defer mu.Unlock()
+	if ticker != nil {
+		return ticker
+	}
+	ticker = StartTicker(tickDur)
+	return ticker
 }
 
 func NumReactors() int { return reactors.Len() }

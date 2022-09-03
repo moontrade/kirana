@@ -53,6 +53,10 @@ type ReadEvent struct {
 	Reason     reactor.PollReason
 }
 
+func (re *ReadEvent) CheckGID() bool {
+	return re.Tailer.CheckGID()
+}
+
 // Contents of the entire AOF
 func (re *ReadEvent) Contents() []byte {
 	return re.contents
@@ -201,7 +205,7 @@ Begin:
 		}
 	} else {
 		toState = TailerReading
-		ctx.Wake()
+		ctx.WakeOnNextTick()
 	}
 
 	if state != toState {

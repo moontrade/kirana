@@ -62,6 +62,16 @@ type Stats struct {
 	ChmodErrorsDur        TimeCounter
 }
 
+var instance *Manager
+
+func init() {
+	var err error
+	instance, err = NewManager("", 0755, 0444)
+	if err != nil {
+		panic(err)
+	}
+}
+
 type Manager struct {
 	dir       string
 	absDir    string

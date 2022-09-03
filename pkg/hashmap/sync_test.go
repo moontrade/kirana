@@ -30,7 +30,6 @@ func BenchmarkMap(b *testing.B) {
 			m.Delete(i)
 		}
 	})
-
 }
 
 func BenchmarkConcurrent(b *testing.B) {
@@ -64,7 +63,7 @@ func BenchmarkConcurrent(b *testing.B) {
 		})
 	})
 
-	b.Run("Sync 30% Delete 30% Store 40% Get", func(b *testing.B) {
+	b.Run("hashmap.Sync 30% Delete 30% Store 40% Get", func(b *testing.B) {
 		m := NewSync[int, int](0, 1024, HashInt)
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -100,7 +99,7 @@ func BenchmarkConcurrent(b *testing.B) {
 		})
 	})
 
-	b.Run("Sync 20% Store 80% Get", func(b *testing.B) {
+	b.Run("hashmap.Sync 20% Store 80% Get", func(b *testing.B) {
 		m := NewSync[int, int](0, 1024, HashInt)
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -151,7 +150,7 @@ func BenchmarkLoad(b *testing.B) {
 			}
 		})
 	})
-	b.Run("Map Get", func(b *testing.B) {
+	b.Run("hashmap.Map Get", func(b *testing.B) {
 		var m = New[int64, struct{}](1024*2, HashInt64)
 		for i := 0; i < initsize; i++ {
 			m.Set(int64(i), struct{}{})
@@ -168,7 +167,7 @@ func BenchmarkLoad(b *testing.B) {
 			}
 		})
 	})
-	b.Run("Sync Get", func(b *testing.B) {
+	b.Run("hashmap.Sync Get", func(b *testing.B) {
 		var m = NewSync[int64, struct{}](512, 1024, HashInt64)
 		for i := 0; i < initsize; i++ {
 			m.Put(int64(i), struct{}{})
@@ -185,7 +184,7 @@ func BenchmarkLoad(b *testing.B) {
 			}
 		})
 	})
-	b.Run("Sync GetOrLoad", func(b *testing.B) {
+	b.Run("hashmap.Sync GetOrLoad", func(b *testing.B) {
 		var m = NewSync[int64, struct{}](512, 1024, HashInt64)
 		for i := 0; i < initsize; i++ {
 			m.Put(int64(i), struct{}{})
@@ -202,7 +201,7 @@ func BenchmarkLoad(b *testing.B) {
 			}
 		})
 	})
-	b.Run("Sync Load", func(b *testing.B) {
+	b.Run("hashmap.Sync Load", func(b *testing.B) {
 		var m = NewSync[int64, struct{}](512, 1024, HashInt64)
 		for i := 0; i < initsize; i++ {
 			m.Put(int64(i), struct{}{})

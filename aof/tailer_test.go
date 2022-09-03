@@ -58,8 +58,9 @@ func TestTailer(t *testing.T) {
 			atomic.StoreInt64(&timer, last)
 			for {
 				//time.Sleep(time.Microsecond * 50)
-				next := timex.NanoTime()
-				atomic.StoreInt64(&timer, next)
+				//next := timex.NanoTime()
+				//atomic.StoreInt64(&timer, next)
+				atomic.StoreInt64(&timer, timex.NanoTime())
 				_, _ = f.Write(buf)
 				wakeAttempts++
 
@@ -125,7 +126,7 @@ type Reader struct {
 }
 
 func (r *Reader) PollRead(event ReadEvent) (int64, error) {
-	started := atomic.LoadInt64(&timer)
+	started := atomic.SwapInt64(&timer, timex.NanoTime())
 	r.last = started
 	next := timex.NanoTime()
 	//for started == 0 {

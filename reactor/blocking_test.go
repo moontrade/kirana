@@ -159,5 +159,5 @@ func BenchmarkBlockingPool(b *testing.B) {
 	}
 
 	b.StopTimer()
-	fmt.Println("workers", len(bp.workers), " wakes", bp.queue.WakeCount(), " wake chan full count", bp.queue.WakeChanFullCount())
+	//fmt.Println("workers", len(bp.workers), " wakes", bp.workers[0].WakeCount(), " wake chan full count", bp.queue.WakeChanFullCount())
 }
