@@ -264,6 +264,6 @@ func (t *Table) Grow(context *Context, delta uint32, init Val) (prevSize uint32,
 
 func (t *Table) AsExtern() Extern {
 	var ret Extern
-	ret.SetTable(t)
+	ret.SetTable(*t)
 	return ret
 }

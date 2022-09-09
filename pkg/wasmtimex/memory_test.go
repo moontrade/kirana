@@ -7,7 +7,7 @@ import (
 
 func TestNewMemory(t *testing.T) {
 	engine := NewEngine()
-	defer engine.Close()
+	defer engine.Delete()
 	store := NewStore(engine, 0, nil)
 	ctx := store.Context()
 	ty := NewMemoryType(1, true, 4, false)

@@ -18,12 +18,12 @@ func BorrowedStringOf(data unsafe.Pointer, size int) BorrowedString {
 	}
 	if *(*byte)(unsafe.Add(data, size-1)) == 0 {
 		return *(*BorrowedString)(unsafe.Pointer(&reflect.StringHeader{
-			Data: 0,
+			Data: uintptr(data),
 			Len:  size - 1,
 		}))
 	} else {
 		return *(*BorrowedString)(unsafe.Pointer(&reflect.StringHeader{
-			Data: 0,
+			Data: uintptr(data),
 			Len:  size,
 		}))
 	}

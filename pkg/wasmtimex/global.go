@@ -176,6 +176,6 @@ func (g *Global) Set(ctx *Context, val Val) *Error {
 
 func (g *Global) AsExtern() Extern {
 	var ret Extern
-	ret.SetGlobal(g)
+	ret.SetGlobal(*g)
 	return ret
 }

@@ -1,33 +1,49 @@
 package wasmtimex
 
-// #include <wasmtime.h>
+/*
+#include <wasm.h>
+#include <wasmtime.h>
+
+void do_wasmtime_error_delete(size_t arg0, size_t arg1) {
+	wasmtime_error_delete(
+		(wasmtime_error_t*)arg0
+	);
+}
+
+void do_wasmtime_error_message(size_t arg0, size_t arg1) {
+	wasmtime_error_message(
+		(wasmtime_error_t*)arg0,
+		(wasm_byte_vec_t*)arg1
+	);
+}
+*/
 import "C"
 import (
+	"github.com/moontrade/unsafe/cgo"
 	"unsafe"
 )
 
 type Error C.wasmtime_error_t
 
-func mkError(ptr *C.wasmtime_error_t) *Error {
-	return (*Error)(unsafe.Pointer(ptr))
-}
-
 func (e *Error) Delete() {
 	if e == nil {
 		return
 	}
-	C.wasmtime_error_delete((*C.wasmtime_error_t)(unsafe.Pointer(e)))
-	*(*uintptr)(unsafe.Pointer(e)) = 0
+	cgo.NonBlocking((*byte)(C.do_wasmtime_error_delete), uintptr(unsafe.Pointer(e)), 0)
 }
 
 func (e *Error) ptr() *C.wasmtime_error_t {
 	return (*C.wasmtime_error_t)(unsafe.Pointer(e))
 }
 
+func (e *Error) Message() (result ByteVec) {
+	cgo.NonBlocking((*byte)(C.do_wasmtime_error_message), uintptr(unsafe.Pointer(e)), uintptr(unsafe.Pointer(&result)))
+	return
+}
+
 func (e *Error) Error() string {
-	message := C.wasm_byte_vec_t{}
-	C.wasmtime_error_message(e.ptr(), &message)
-	ret := C.GoStringN(message.data, C.int(message.size))
-	C.wasm_byte_vec_delete(&message)
-	return ret
+	m := e.Message()
+	defer m.Delete()
+	s := m.String()
+	return s
 }

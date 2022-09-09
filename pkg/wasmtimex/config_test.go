@@ -4,7 +4,7 @@ import "testing"
 
 func TestConfig(t *testing.T) {
 	cfg := NewConfig()
-	defer cfg.Close()
+	defer cfg.Delete()
 	cfg.SetDebugInfo(true)
 	cfg.SetWasmThreads(true)
 	cfg.SetWasmReferenceTypes(true)

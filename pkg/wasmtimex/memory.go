@@ -196,6 +196,6 @@ func (m *Memory) Grow(context *Context, delta uint64) (prevSize uint64, err *Err
 
 func (m *Memory) AsExtern() Extern {
 	var ret Extern
-	ret.SetMemory(m)
+	ret.SetMemory(*m)
 	return ret
 }

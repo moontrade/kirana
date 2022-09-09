@@ -109,7 +109,7 @@ func BenchmarkBytesPool_Get(b *testing.B) {
 			}
 		}
 	})
-	b.Run("Wormhole Pool Random Sizes", func(b *testing.B) {
+	b.Run("Kirana Pool Random Sizes", func(b *testing.B) {
 		//for _, pool := range defaultBytes.pools {
 		//	if pool == nil {
 		//		continue
@@ -196,7 +196,7 @@ func BenchmarkBytesPool_Get(b *testing.B) {
 			//p.Put(p.Get())
 		}
 	})
-	b.Run("Wormhole Pool Slab", func(b *testing.B) {
+	b.Run("Kirana Pool Slab", func(b *testing.B) {
 		size := randomRangeSizes[12&mask]
 		p := defaultBytes.s.Slab(size)
 		p.Put(p.Get())

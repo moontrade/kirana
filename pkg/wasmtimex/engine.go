@@ -1,8 +1,25 @@
 package wasmtimex
 
-// #include <wasmtime.h>
+/*
+#include <wasm.h>
+#include <wasmtime.h>
+#include "ffi.h"
+
+void do_wasmtime_engine_delete(size_t arg0, size_t arg1) {
+	wasm_engine_delete(
+		(wasm_engine_t*)arg0
+	);
+}
+
+void do_wasmtime_engine_increment_epoch(size_t arg0, size_t arg1) {
+	wasmtime_engine_increment_epoch(
+		(wasm_engine_t*)arg0
+	);
+}
+*/
 import "C"
 import (
+	"github.com/moontrade/unsafe/cgo"
 	"unsafe"
 )
 
@@ -14,36 +31,40 @@ type Engine C.wasm_engine_t
 
 // NewEngine creates a new `Engine` with default configuration.
 func NewEngine() *Engine {
-	return (*Engine)(unsafe.Pointer(C.wasm_engine_new()))
+	return NewEngineWithConfigBuilder(DefaultConfig)
+	//return (*Engine)(unsafe.Pointer(C.wasm_engine_new()))
 }
 
 // NewEngineWithConfig creates a new `Engine` with the `Config` provided
 //
 // Note that once a `Config` is passed to this method it cannot be used again.
-//func NewEngineWithConfig(config *Config) *Engine {
-//	if config == nil {
-//		panic("config already used")
-//	}
-//	engine := (*Engine)(unsafe.Pointer(C.wasm_engine_new_with_config(config.ptr())))
-//	return engine
-//}
+func NewEngineWithConfig(config *Config) *Engine {
+	if config == nil {
+		panic("config already used")
+	}
+	engine := (*Engine)(unsafe.Pointer(C.wasm_engine_new_with_config((*C.wasm_config_t)(unsafe.Pointer(config)))))
+	return engine
+}
 
-func NewEngineWithConfig(fn func(cfg *Config)) *Engine {
+// NewEngineWithConfigBuilder creates a new `Engine` with the `Config` provided
+//
+// Note that once a `Config` is passed to this method it cannot be used again.
+func NewEngineWithConfigBuilder(fn func(cfg *Config)) *Engine {
 	if fn == nil {
 		return NewEngine()
 	}
 	config := NewConfig()
 	fn(config)
-	engine := (*Engine)(unsafe.Pointer(C.wasm_engine_new_with_config(config.ptr())))
+	engine := (*Engine)(unsafe.Pointer(C.wasm_engine_new_with_config((*C.wasm_config_t)(unsafe.Pointer(config)))))
 	return engine
 }
 
-func (engine *Engine) Close() error {
+func (engine *Engine) Delete() {
 	if engine == nil {
-		return nil
+		return
 	}
-	C.wasm_engine_delete(engine.ptr())
-	return nil
+	RemoveEpochEngine(engine)
+	cgo.NonBlocking((*byte)(C.do_wasmtime_engine_delete), uintptr(unsafe.Pointer(engine)), 0)
 }
 
 func (engine *Engine) ptr() *C.wasm_engine_t {
@@ -56,5 +77,5 @@ func (engine *Engine) ptr() *C.wasm_engine_t {
 //
 // This method is safe to call from any goroutine.
 func (engine *Engine) IncrementEpoch() {
-	C.wasmtime_engine_increment_epoch(engine.ptr())
+	cgo.NonBlocking((*byte)(C.do_wasmtime_engine_increment_epoch), uintptr(unsafe.Pointer(engine.ptr())), 0)
 }

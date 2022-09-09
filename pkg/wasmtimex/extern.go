@@ -57,20 +57,20 @@ func (extern *ExternUnion) Memory() *Memory {
 	return (*Memory)(unsafe.Pointer(extern))
 }
 
-func (eu *ExternUnion) SetFunc(fn *Func) {
-	*(**Func)(unsafe.Pointer(eu)) = fn
+func (eu *ExternUnion) SetFunc(fn Func) {
+	*(*Func)(unsafe.Pointer(eu)) = fn
 }
 
-func (eu *ExternUnion) SetGlobal(global *Global) {
-	*(**Global)(unsafe.Pointer(eu)) = global
+func (eu *ExternUnion) SetGlobal(global Global) {
+	*(*Global)(unsafe.Pointer(eu)) = global
 }
 
-func (eu *ExternUnion) SetMemory(memory *Memory) {
-	*(**Memory)(unsafe.Pointer(eu)) = memory
+func (eu *ExternUnion) SetMemory(memory Memory) {
+	*(*Memory)(unsafe.Pointer(eu)) = memory
 }
 
-func (eu *ExternUnion) SetTable(table *Table) {
-	*(**Table)(unsafe.Pointer(eu)) = table
+func (eu *ExternUnion) SetTable(table Table) {
+	*(*Table)(unsafe.Pointer(eu)) = table
 }
 
 type Extern struct {
@@ -116,22 +116,22 @@ func (extern *Extern) Memory() *Memory {
 	return (*Memory)(unsafe.Pointer(&extern.Of))
 }
 
-func (extern *Extern) SetFunc(fn *Func) {
+func (extern *Extern) SetFunc(fn Func) {
 	extern.Kind = ExternKindFunc
 	extern.Of.SetFunc(fn)
 }
 
-func (extern *Extern) SetGlobal(global *Global) {
+func (extern *Extern) SetGlobal(global Global) {
 	extern.Kind = ExternKindGlobal
 	extern.Of.SetGlobal(global)
 }
 
-func (extern *Extern) SetMemory(memory *Memory) {
+func (extern *Extern) SetMemory(memory Memory) {
 	extern.Kind = ExternKindMemory
 	extern.Of.SetMemory(memory)
 }
 
-func (extern *Extern) SetTable(table *Table) {
+func (extern *Extern) SetTable(table Table) {
 	extern.Kind = ExternKindTable
 	extern.Of.SetTable(table)
 }

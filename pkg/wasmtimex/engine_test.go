@@ -1,10 +1,12 @@
 package wasmtimex
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestEngine(t *testing.T) {
-	NewEngine().Close()
-	NewEngineWithConfig(func(cfg *Config) {
+	NewEngine().Delete()
+	NewEngineWithConfigBuilder(func(cfg *Config) {
 		cfg.SetEpochInterruption(true)
-	}).Close()
+	}).Delete()
 }

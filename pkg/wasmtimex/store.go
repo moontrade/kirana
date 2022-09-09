@@ -1,8 +1,8 @@
 package wasmtimex
 
 /*
+#include <wasm.h>
 #include <wasmtime.h>
-#include "shims.h"
 
 typedef struct do_wasmtime_store_new_t {
 	size_t engine;
@@ -213,7 +213,7 @@ func (c *Context) AddFuel(fuel uint64) *Error {
 //
 //	Also note that fuel, if enabled, must be originally configured via
 //	#wasmtime_context_add_fuel.
-func (c *Context) FuelConsumed() (bool, uint64) {
+func (c *Context) FuelConsumed() (uint64, bool) {
 	args := struct {
 		context uintptr
 		fuel    uint64
@@ -222,7 +222,7 @@ func (c *Context) FuelConsumed() (bool, uint64) {
 		context: uintptr(unsafe.Pointer(c)),
 	}
 	cgo.NonBlocking((*byte)(C.do_wasmtime_context_fuel_consumed), uintptr(unsafe.Pointer(&args)), 0)
-	return args.result, args.fuel
+	return args.fuel, args.result
 }
 
 // ConsumeFuel attempts to manually consume fuel from the store.
@@ -235,7 +235,7 @@ func (c *Context) FuelConsumed() (bool, uint64) {
 //
 //	Also note that fuel, if enabled, must be originally configured via
 //	#wasmtime_context_add_fuel.
-func (c *Context) ConsumeFuel(fuel uint64) (err *Error, remaining uint64) {
+func (c *Context) ConsumeFuel(fuel uint64) (remaining uint64, err *Error) {
 	args := struct {
 		context   uintptr
 		fuel      uint64
@@ -246,7 +246,7 @@ func (c *Context) ConsumeFuel(fuel uint64) (err *Error, remaining uint64) {
 		fuel:    fuel,
 	}
 	cgo.NonBlocking((*byte)(C.do_wasmtime_context_consume_fuel), uintptr(unsafe.Pointer(&args)), 0)
-	return (*Error)(unsafe.Pointer(args.error)), args.remaining
+	return args.remaining, (*Error)(unsafe.Pointer(args.error))
 }
 
 // SetEpochDeadline
@@ -258,7 +258,7 @@ func (c *Context) ConsumeFuel(fuel uint64) (err *Error, remaining uint64) {
 //	See also #wasmtime_config_epoch_interruption_set.
 func (c *Context) SetEpochDeadline(ticksBeyondCurrent uint64) {
 	cgo.NonBlocking(
-		(*byte)(C.do_wasmtime_context_set_epoch_deadline),
+		(*byte)(C.wasmtime_context_set_epoch_deadline),
 		uintptr(unsafe.Pointer(c)),
 		uintptr(ticksBeyondCurrent),
 	)

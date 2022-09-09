@@ -8,6 +8,18 @@ import (
 	"unsafe"
 )
 
+func DefaultConfig(cfg *Config) {
+	cfg.SetStrategy(StrategyCranelift)
+	cfg.SetEpochInterruption(true)
+	cfg.SetWasmMultiMemory(true)
+	cfg.SetWasmMultiValue(true)
+	cfg.SetWasmBulkMemory(true)
+	cfg.SetWasmThreads(false)
+	cfg.SetWasmMemory64(false)
+	cfg.SetWasmReferenceTypes(false)
+	cfg.SetWasmSIMD(true)
+}
+
 // Strategy is the compilation strategies for wasmtime
 type Strategy C.wasmtime_strategy_t
 
@@ -49,11 +61,10 @@ func NewConfig() *Config {
 	return (*Config)(unsafe.Pointer(C.wasm_config_new()))
 }
 
-func (cfg *Config) Close() error {
+func (cfg *Config) Delete() {
 	if cfg != nil {
 		C.wasm_config_delete((*C.wasm_config_t)(unsafe.Pointer(cfg)))
 	}
-	return nil
 }
 
 func (cfg *Config) ptr() *C.wasm_config_t {
@@ -131,12 +142,8 @@ func (cfg *Config) SetProfiler(profiler ProfilingStrategy) {
 //
 // For more information about caching see
 // https://bytecodealliance.github.io/wasmtime/cli-cache.html
-func (cfg *Config) CacheConfigLoadDefault() error {
-	err := C.wasmtime_config_cache_config_load(cfg.ptr(), nil)
-	if err != nil {
-		return mkError(err)
-	}
-	return nil
+func (cfg *Config) CacheConfigLoadDefault() *Error {
+	return (*Error)(unsafe.Pointer(C.wasmtime_config_cache_config_load(cfg.ptr(), nil)))
 }
 
 // CacheConfigLoad enables compiled code caching for this `Config` using the settings specified
@@ -144,14 +151,10 @@ func (cfg *Config) CacheConfigLoadDefault() error {
 //
 // For more information about caching and configuration options see
 // https://bytecodealliance.github.io/wasmtime/cli-cache.html
-func (cfg *Config) CacheConfigLoad(path string) error {
+func (cfg *Config) CacheConfigLoad(path string) *Error {
 	cstr := C.CString(path)
-	err := C.wasmtime_config_cache_config_load(cfg.ptr(), cstr)
-	C.free(unsafe.Pointer(cstr))
-	if err != nil {
-		return mkError(err)
-	}
-	return nil
+	defer C.free(unsafe.Pointer(cstr))
+	return (*Error)(unsafe.Pointer(C.wasmtime_config_cache_config_load(cfg.ptr(), cstr)))
 }
 
 // SetEpochInterruption enables epoch-based instrumentation of generated code to

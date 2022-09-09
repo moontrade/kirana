@@ -2,12 +2,36 @@ package reactor
 
 import (
 	logger "github.com/moontrade/log"
+	"runtime"
 	"testing"
 	"time"
 )
 
+func TestHFTicker(t *testing.T) {
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
+		tick := time.Microsecond * 10000
+		//tick = time.Millisecond * 500
+		//next := timex.NanoTime() + int64(tick)
+
+		for {
+			//begin := timex.NanoTime()
+			//time.Sleep(time.Duration(next - begin))
+			//next += int64(tick)
+			park(tick)
+			//cgo.NonBlocking((*byte)(cgo2.Sleep), uintptr(tick), 0)
+			//fmt.Println(timex.NanoTime())
+			//end := timex.NanoTime()
+		}
+	}()
+
+	time.Sleep(time.Hour)
+}
+
 func TestTicker(t *testing.T) {
-	ticker := StartTicker(time.Millisecond * 250)
+	ticker := StartTicker(time.Microsecond * 5000)
 	//var ms runtime.MemStats
 	run := func(dur time.Duration) {
 		ch := make(chan int64, 1)

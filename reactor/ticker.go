@@ -1,5 +1,16 @@
 package reactor
 
+/*
+#include <time.h>
+void kirana_sleep(size_t arg0, size_t arg1) {
+	//struct timespec ts;
+    //ts.tv_sec = 0;
+    //ts.tv_nsec = arg0;
+	//nanosleep(&ts, &ts);
+	//std::this_thread::sleep_for((std::chrono::nanoseconds)arg0);
+}
+*/
+import "C"
 import (
 	"errors"
 	"github.com/moontrade/kirana/pkg/counter"
@@ -7,6 +18,8 @@ import (
 	"github.com/moontrade/kirana/pkg/timex"
 	"github.com/moontrade/kirana/pkg/util"
 	logger "github.com/moontrade/log"
+	"github.com/moontrade/unsafe/cgo"
+	cgoHelper "github.com/moontrade/unsafe/cgo/cgo"
 	"os"
 	"runtime"
 	"sync"
@@ -114,16 +127,16 @@ func (t *Ticker) run() {
 			if int64(t.skewMax) < ticksBehind {
 				t.skewMax.Store(ticksBehind)
 			}
-			timeBehind := end - next
+			//timeBehind := end - next
 			t.ticks.Add(ticksBehind)
 			next += tickDur * ticksBehind
 			sleep = time.Duration(next - end)
 			next += tickDur
 
-			logger.Warn("behind", ticksBehind, "ticker is behind %d ticks %s time sleeping for %s", ticksBehind, time.Duration(timeBehind), sleep)
+			//logger.Warn("behind", ticksBehind, "ticker is behind %d ticks %s time sleeping for %s", ticksBehind, time.Duration(timeBehind), sleep)
 
 			if sleep > 0 {
-				time.Sleep(sleep)
+				park(sleep)
 			}
 			//endTick := int64(t.ticks) + ticksBehind
 			//for ; int64(t.ticks) <= endTick; t.ticks.Incr() {
@@ -147,12 +160,17 @@ func (t *Ticker) run() {
 			sleep = time.Duration(next - end)
 			next += tickDur
 			if sleep > 0 {
-				time.Sleep(sleep)
+				park(sleep)
 			}
 		}
 
 		begin = timex.NanoTime()
 	}
+}
+
+func park(duration time.Duration) {
+	//time.Sleep(duration)
+	cgo.NonBlocking((*byte)(cgoHelper.Sleep), uintptr(duration), 0)
 }
 
 type TickListener struct {

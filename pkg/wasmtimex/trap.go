@@ -66,6 +66,33 @@ void do_wasmtime_frame_module_name(size_t arg0, size_t arg1) {
 	);
 }
 
+void do_wasm_trap_trace(size_t arg0, size_t arg1) {
+	wasm_trap_trace(
+		(const wasm_trap_t*)(void*)arg0,
+		(wasm_frame_vec_t*)(void*)arg1
+	);
+}
+
+void do_wasm_trap_origin(size_t arg0, size_t arg1) {
+	*((const wasm_frame_t**)arg1) = wasm_trap_origin(
+		(const wasm_trap_t*)(void*)arg0
+	);
+}
+
+typedef struct do_wasmtime_trap_exit_status_t {
+	size_t trap;
+	int32_t status;
+	int32_t ok;
+} do_wasmtime_trap_exit_status_t;
+
+void do_wasmtime_trap_exit_status(size_t arg0, size_t arg1) {
+	do_wasmtime_trap_exit_status_t* args = (do_wasmtime_trap_exit_status_t*)(void*)arg0;
+	args->ok = wasmtime_trap_exit_status(
+		(const wasm_trap_t*)(void*)args->trap,
+		(int*)(void*)&args->status
+	) ? 1 : 0;
+}
+
 */
 import "C"
 import (
@@ -116,18 +143,11 @@ func NewTrap(message string) *Trap {
 	return (*Trap)(unsafe.Pointer(C.wasmtime_trap_new(C._GoStringPtr(message), C._GoStringLen(message))))
 }
 
-func (t *Trap) ptr() *C.wasm_trap_t {
-	return (*C.wasm_trap_t)(unsafe.Pointer(t))
-}
-
 func (t *Trap) IsError() bool {
 	return t != nil
 }
 
 func (t *Trap) Delete() {
-	if t == nil {
-		return
-	}
 	cgo.NonBlocking((*byte)(C.do_wasm_trap_delete), uintptr(unsafe.Pointer(t)), 0)
 }
 
@@ -150,7 +170,7 @@ func (t *Trap) Message() (message ByteVec) {
 // through the `code` pointer. If `false` is returned then this is not
 // an instruction trap -- traps can also be created using wasm_trap_new,
 // or occur with WASI modules exiting with a certain exit code.
-func (t *Trap) Code() (ok bool, code TrapCode) {
+func (t *Trap) Code() (code TrapCode, ok bool) {
 	args := struct {
 		trap   uintptr
 		code   uintptr
@@ -160,12 +180,40 @@ func (t *Trap) Code() (ok bool, code TrapCode) {
 		code: uintptr(unsafe.Pointer(&code)),
 	}
 	cgo.NonBlocking((*byte)(C.do_wasmtime_trap_code), uintptr(unsafe.Pointer(&args)), 0)
-	return args.result != 0, code
+	return code, args.result != 0
 }
 
 func (t *Trap) Error() string {
 	m := t.Message()
 	return m.ToOwned()
+}
+
+// Frames returns the wasm function frames that make up this trap
+func (t *Trap) Frames() (frames FrameVec) {
+	cgo.NonBlocking((*byte)(C.do_wasm_trap_trace), uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(&frames)))
+	return
+}
+
+func (t *Trap) Origin() (origin *Frame) {
+	cgo.NonBlocking((*byte)(C.do_wasm_trap_origin), uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(&origin)))
+	return
+}
+
+// ExitStatus attempts to extract a WASI-specific exit status from this trap.
+//
+// Returns `true` if the trap is a WASI "exit" trap and has a return status. If
+// `true` is returned then the exit status is returned through the `status`
+// pointer. If `false` is returned then this is not a wasi exit trap.
+func (t *Trap) ExitStatus() (status int32, ok bool) {
+	args := struct {
+		trap   uintptr
+		status int32
+		ok     int32
+	}{
+		trap: uintptr(unsafe.Pointer(t)),
+	}
+	cgo.NonBlocking((*byte)(C.do_wasmtime_trap_exit_status), uintptr(unsafe.Pointer(&args)), 0)
+	return args.status, args.ok != 0
 }
 
 type FrameVec struct {
@@ -185,10 +233,10 @@ func (fv *FrameVec) At(index int) *Frame {
 	if index < 0 || index >= size {
 		return nil
 	}
-	return (*Frame)(unsafe.Add(unsafe.Pointer(fv.vec.data), uintptr(index)*unsafe.Sizeof(uintptr(0))))
+	return *(**Frame)(unsafe.Add(unsafe.Pointer(fv.vec.data), uintptr(index)*unsafe.Sizeof(uintptr(0))))
 }
 
-func (fv *FrameVec) Frames() []*Frame {
+func (fv *FrameVec) Unsafe() []*Frame {
 	return *(*[]*Frame)(unsafe.Pointer(&reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(fv.vec.data)),
 		Len:  int(fv.vec.size),
@@ -196,8 +244,8 @@ func (fv *FrameVec) Frames() []*Frame {
 	}))
 }
 
-func (f *Frame) ptr() *C.wasm_frame_t {
-	return (*C.wasm_frame_t)(unsafe.Pointer(f))
+func (f *Frame) Delete() {
+	cgo.NonBlocking((*byte)(C.wasm_frame_delete), uintptr(unsafe.Pointer(f)), 0)
 }
 
 // FuncIndex returns the function index in the wasm module that this frame represents
