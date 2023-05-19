@@ -39,8 +39,9 @@ func TestPtrData(t *testing.T) {
 }
 
 func BenchmarkConcurrentPool(b *testing.B) {
+	value := make([]byte, 128)
 	allocate := func() unsafe.Pointer {
-		value := make([]byte, 128)
+		//value := make([]byte, 128)
 		return unsafe.Pointer(&value[0])
 	}
 	//b.Run("sync.Pool", func(b *testing.B) {
@@ -100,10 +101,10 @@ func BenchmarkConcurrentPool(b *testing.B) {
 	})
 
 	b.Run("Pool", func(b *testing.B) {
-		pool := NewPool[func()](Config[func()]{
-			ShardFunc:     ShardByGoroutineID,
-			PageSize:      1024,
-			PagesPerShard: 1024,
+		pool := NewPool[[]byte](Config[[]byte]{
+			ShardFunc:     ShardByProcessor,
+			PageSize:      65535,
+			PagesPerShard: 8192,
 			AllocFunc: func() unsafe.Pointer {
 				return allocate()
 			},
@@ -336,7 +337,10 @@ func TestConcurrentSyncPool(t *testing.T) {
 }
 
 func TestConcurrentPool(t *testing.T) {
-	iterations := 10000000
+	iterations := 1000000
+	numConsumers := 8
+	totalIterations := numConsumers * iterations
+	finalCount := int64(totalIterations - 1)
 
 	t.Run("syncx.Pool", func(t *testing.T) {
 		c := new(counter.Counter)
@@ -352,9 +356,6 @@ func TestConcurrentPool(t *testing.T) {
 		}}
 
 		wg := new(sync.WaitGroup)
-		numConsumers := 4
-		totalIterations := numConsumers * iterations
-		finalCount := int64(totalIterations - 1)
 
 		start := timex.NewStopWatch()
 
@@ -409,18 +410,17 @@ func TestConcurrentPool(t *testing.T) {
 		}
 		//fnp := runtimex.FuncToPointer(fn)
 		pool := NewPool[func()](Config[func()]{
-			//ShardFunc: ShardByGoroutineID,
+			ShardFunc:     ShardByProcessor,
+			PageSize:      8192,
+			PagesPerShard: 8192,
 			AllocFunc: func() unsafe.Pointer {
 				return runtimex.FuncToPointer(fn)
 			},
 		})
 
 		wg := new(sync.WaitGroup)
-		numConsumers := 4
 		//numProducers := runtime.GOMAXPROCS(0) * 2
 		//numProducers = 0
-		totalIterations := numConsumers * iterations
-		finalCount := int64(totalIterations - 1)
 
 		start := timex.NewStopWatch()
 
@@ -445,8 +445,9 @@ func TestConcurrentPool(t *testing.T) {
 
 				for x := 0; x < iterations; x++ {
 					next := runtimex.FuncFromPointer(shard.GetUnsafe())
-					next()
-					shard.PutUnsafe(runtimex.FuncToPointer(next))
+					//next()
+					c.Incr()
+					pool.PutUnsafe(runtimex.FuncToPointer(next))
 				}
 			}()
 		}
@@ -510,7 +511,7 @@ func TestPool(t *testing.T) {
 	wg := new(sync.WaitGroup)
 	startWg := new(sync.WaitGroup)
 	numWorkers := runtime.GOMAXPROCS(0) * 2
-	numWorkers = 5
+	numWorkers = 2
 	iterations := 10000000
 	totalIterations := numWorkers * iterations
 	//finalCount := int64(totalIterations - 1)
@@ -521,13 +522,14 @@ func TestPool(t *testing.T) {
 
 	for i := 0; i < numWorkers; i++ {
 		s := pool.shards[i]
+		_ = s
 		wg.Add(1)
 		startWg.Add(1)
 		go func() {
 			defer wg.Done()
 			startWg.Done()
 			for x := 0; x < iterations; x++ {
-				s.PutUnsafe(s.GetUnsafe())
+				pool.PutUnsafe(s.GetUnsafe())
 				//pool.Put(pool.Get())
 			}
 		}()

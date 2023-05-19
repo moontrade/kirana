@@ -465,11 +465,11 @@ func (r *Reactor) rebalance() {
 func (r *Reactor) tick(tick int64, now int64) {
 	r.tickWheel.tick(now, r.onTick)
 	if tick%r.ticksPerLevel2 == 0 {
-		logger.Debug("level 2 wheel Tick", tick)
+		//logger.Debug("level 2 wheel Tick", tick)
 		r.level2Wheel.tick(now, r.onTick)
 	}
 	if tick%r.ticksPerLevel3 == 0 {
-		logger.Debug("level 3 wheel Tick")
+		//logger.Debug("level 3 wheel Tick")
 		r.level3Wheel.tick(now, r.onTick)
 	}
 }

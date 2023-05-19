@@ -122,10 +122,21 @@ func TestLinker(t *testing.T) {
 }
 
 func BenchmarkLinker(b *testing.B) {
-	engine := NewEngine()
+	engine := NewEngineWithConfigBuilder(func(cfg *Config) {
+		cfg.SetEpochInterruption(true)
+		cfg.SetStrategy(StrategyCranelift)
+		cfg.SetCraneliftOptLevel(2)
+		cfg.SetDebugInfo(false)
+		cfg.SetWasmSIMD(true)
+		cfg.SetWasmBulkMemory(true)
+		cfg.SetWasmMultiMemory(true)
+	})
+	//engine := NewEngine()
 	defer engine.Delete()
 	store := NewStore(engine, 0, nil)
 	defer store.Delete()
+
+	store.Context().SetEpochDeadline(500)
 
 	ctx := store.Context()
 
@@ -146,20 +157,19 @@ func BenchmarkLinker(b *testing.B) {
 	}
 	defer wasm1.Delete()
 
+	//wasm2, err := Wat2Wasm(`
+	//(module
+	//(func (export "double") (param i32) (result i32)
+	//  local.get 0
+	//  i32.const 2
+	//  i32.mul
+	//)
+	//)`)
 	wasm2, err := Wat2Wasm(`
 	(module
 	(func (export "double") (param i32) (result i32)
-	  local.get 0
-	  i32.const 2
-	  i32.mul
-	)
+      i32.const 2)
 	)`)
-	//wasm2, err := Wat2Wasm(`
-	//(module
-	// (func (export "double") (param i32) (result i32)
-	//   i32.const 4
-	// )
-	//)`)
 	if err != nil {
 		defer err.Delete()
 		b.Fatal(err.Error())
@@ -176,6 +186,43 @@ func BenchmarkLinker(b *testing.B) {
 	if err != nil {
 		defer err.Delete()
 		b.Fatal(err.Error())
+	}
+
+	instance, trap, err := NewInstance(store.Context(), module2)
+	if trap != nil {
+		defer trap.Delete()
+		b.Fatal(trap.Error())
+	}
+	doubleFunc, ok := instance.ExportNamed(store.Context(), "double")
+	if ok {
+		fn := doubleFunc.Func()
+		params := make([]Val, 1)
+		params[0].SetI32(2)
+		//params[1].SetI32(3)
+		results := make([]Val, 1)
+		trap, err = fn.Call(store.Context(), params, results)
+		if trap != nil {
+			defer trap.Delete()
+			b.Fatal(trap.Error())
+		}
+		if err != nil {
+			defer err.Delete()
+			b.Fatal(err.Error())
+		}
+
+		paramsAndResults := make([]ValRaw, 2)
+		paramsAndResults[0].SetI32(2)
+		paramsAndResults[1].SetI32(3)
+
+		trap = doubleFunc.Func().CallUnchecked(store.Context(), paramsAndResults)
+		if trap != nil {
+			defer trap.Delete()
+			b.Fatal(trap.Error())
+		}
+		if err != nil {
+			defer err.Delete()
+			b.Fatal(err.Error())
+		}
 	}
 
 	linker := NewLinker(engine)
@@ -230,24 +277,24 @@ func BenchmarkLinker(b *testing.B) {
 	paramsAndResults := make([]ValRaw, 2)
 	paramsAndResults[0].SetI32(2)
 	paramsAndResults[1].SetI32(3)
-	trap = doubleAndAdd.CallUnchecked(ctx, paramsAndResults)
-	if trap != nil {
-		defer trap.Delete()
-		b.Fatal(trap.Error())
-	}
-	res := paramsAndResults[0].I32()
-	fmt.Println(res)
-
+	//trap = doubleAndAdd.CallUnchecked(ctx, paramsAndResults)
+	//if trap != nil {
+	//	defer trap.Delete()
+	//	b.Fatal(trap.Error())
+	//}
+	//res := paramsAndResults[0].I32()
+	//fmt.Println(res)
+	//
 	results := make([]Val, 1)
-	trap, err = doubleAndAdd.Call(ctx, params, results)
-	if trap != nil {
-		defer trap.Delete()
-		b.Fatal(trap.Error())
-	}
-	if err != nil {
-		defer err.Delete()
-		b.Fatal(err.Error())
-	}
+	//trap, err = doubleAndAdd.Call(ctx, params, results)
+	//if trap != nil {
+	//	defer trap.Delete()
+	//	b.Fatal(trap.Error())
+	//}
+	//if err != nil {
+	//	defer err.Delete()
+	//	b.Fatal(err.Error())
+	//}
 
 	b.Run("checked", func(b *testing.B) {
 		b.ReportAllocs()

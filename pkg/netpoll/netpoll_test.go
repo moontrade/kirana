@@ -17,7 +17,7 @@ type Task struct {
 func TestNetpoll(t *testing.T) {
 	poll := OpenPoll[Task]()
 
-	onEvent := func(index, count, fd int, conn *Task) error {
+	onEvent := func(index, count, fd int, filter int16, conn *Task) error {
 		if index == -1 {
 
 			return nil
@@ -40,6 +40,7 @@ func TestNetpoll(t *testing.T) {
 		if err := poll.Wait(time.Second, onEvent, onLoop); err != nil {
 			panic(err)
 		}
+		fmt.Println("test")
 	}()
 
 	go func() {
@@ -58,23 +59,23 @@ func BenchmarkWake(b *testing.B) {
 	fn := func() {
 		c.Incr()
 	}
-	queue := mpsc.New[func()](uint64(b.N)*2, nil)
 
-	flushTasks := func(fn *func()) bool {
+	queue := mpsc.NewBounded[func()](int64(b.N)*2, nil)
+
+	flushTasks := func(fn *func()) {
 		(*fn)()
-		return true
 	}
 
-	onEvent := func(index, count, fd int, conn *Task) error {
+	onEvent := func(index, count, fd int, filter int16, conn *Task) error {
 		if fd == 0 {
-			queue.DequeueMany(math.MaxUint32, flushTasks)
+			queue.PopMany(math.MaxUint32, flushTasks)
 			return nil
 		}
 		return nil
 	}
 
 	onLoop := func(count int) (time.Duration, error) {
-		queue.DequeueMany(math.MaxUint32, flushTasks)
+		queue.PopMany(math.MaxUint32, flushTasks)
 
 		//end = timex.NanoTime()
 		if count == 0 {
@@ -99,10 +100,10 @@ func BenchmarkWake(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		queue.Enqueue(&fn)
-		//_ = poll.Wake()
+		queue.Push(&fn)
+		_ = poll.Wake()
 		if i%1000000 == 0 {
-			_ = poll.Wake()
+			//_ = poll.Wake()
 		}
 	}
 

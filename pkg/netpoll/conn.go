@@ -54,7 +54,7 @@ func newUDPConn[T any](
 func (c *Conn[T]) releaseTCP() {
 	c.opened = false
 	c.peer = nil
-	c.ctx = nil
+	//c.ctx = nil
 	//c.buffer = nil
 	if addr, ok := c.localAddr.(*net.TCPAddr); ok && c.localAddr != c.loop.ln.addr {
 		_ = addr

@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/mpsc"
 	"github.com/moontrade/kirana/pkg/timex"
 	logger "github.com/moontrade/log"
 	"github.com/panjf2000/ants"
+	"math"
 	"runtime"
 	"testing"
 	"time"
+	"unsafe"
 )
 
 func TestWorker(t *testing.T) {
@@ -197,4 +200,94 @@ func BenchmarkGopool(b *testing.B) {
 	}
 
 	b.StopTimer()
+}
+
+type MPSCWorker struct {
+	queue mpsc.Bounded[int]
+}
+
+type ChanWorker struct {
+	ch chan int
+}
+
+func BenchmarkQueues(b *testing.B) {
+	b.Run("mpsc", func(b *testing.B) {
+		var counter counter.Counter
+		q := mpsc.NewBounded[int](16, make(chan int64, 1))
+		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+
+			exit := false
+			pop := func(v *int) {
+				if uintptr(unsafe.Pointer(v)) == math.MaxUint64 {
+					exit = true
+				}
+				counter.Incr()
+			}
+			_ = pop
+			for !exit {
+				v := q.PopUnsafe()
+				if v == nil {
+					runtime.Gosched()
+					continue
+				}
+				if uintptr(v) == math.MaxUint64 {
+					counter.Incr()
+					return
+				}
+				counter.Incr()
+				//if q.PopMany(math.MaxUint32, pop) == 0 {
+				//	runtime.Gosched()
+				//}
+			}
+		}()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 1; i < b.N; i++ {
+			for !q.PushUnsafe(unsafe.Pointer(uintptr(i))) {
+			}
+		}
+		q.PushUnsafe(unsafe.Pointer(uintptr(math.MaxUint64)))
+
+		for counter.Load() < int64(b.N-1) {
+			runtime.Gosched()
+			//b.Log(counter.Load(), "of", b.N)
+		}
+
+		b.StopTimer()
+	})
+
+	b.Run("chan", func(b *testing.B) {
+		var counter counter.Counter
+		ch := make(chan int, 16)
+		go func() {
+			//runtime.LockOSThread()
+			//defer runtime.UnlockOSThread()
+			for {
+				msg, ok := <-ch
+				if !ok {
+					return
+				}
+				_ = msg
+				counter.Incr()
+			}
+		}()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			ch <- i
+		}
+
+		for counter.Load() < int64(b.N-1) {
+			runtime.Gosched()
+		}
+
+		b.StopTimer()
+		close(ch)
+	})
 }

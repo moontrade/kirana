@@ -79,19 +79,19 @@ void do_wasm_trap_origin(size_t arg0, size_t arg1) {
 	);
 }
 
-typedef struct do_wasmtime_trap_exit_status_t {
-	size_t trap;
-	int32_t status;
-	int32_t ok;
-} do_wasmtime_trap_exit_status_t;
-
-void do_wasmtime_trap_exit_status(size_t arg0, size_t arg1) {
-	do_wasmtime_trap_exit_status_t* args = (do_wasmtime_trap_exit_status_t*)(void*)arg0;
-	args->ok = wasmtime_trap_exit_status(
-		(const wasm_trap_t*)(void*)args->trap,
-		(int*)(void*)&args->status
-	) ? 1 : 0;
-}
+//typedef struct do_wasmtime_trap_exit_status_t {
+//	size_t trap;
+//	int32_t status;
+//	int32_t ok;
+//} do_wasmtime_trap_exit_status_t;
+//
+//void do_wasmtime_trap_exit_status(size_t arg0, size_t arg1) {
+//	do_wasmtime_trap_exit_status_t* args = (do_wasmtime_trap_exit_status_t*)(void*)arg0;
+//	args->ok = wasmtime_trap_exit_status(
+//		(const wasm_trap_t*)(void*)args->trap,
+//		(int*)(void*)&args->status
+//	) ? 1 : 0;
+//}
 
 */
 import "C"
@@ -204,17 +204,17 @@ func (t *Trap) Origin() (origin *Frame) {
 // Returns `true` if the trap is a WASI "exit" trap and has a return status. If
 // `true` is returned then the exit status is returned through the `status`
 // pointer. If `false` is returned then this is not a wasi exit trap.
-func (t *Trap) ExitStatus() (status int32, ok bool) {
-	args := struct {
-		trap   uintptr
-		status int32
-		ok     int32
-	}{
-		trap: uintptr(unsafe.Pointer(t)),
-	}
-	cgo.NonBlocking((*byte)(C.do_wasmtime_trap_exit_status), uintptr(unsafe.Pointer(&args)), 0)
-	return args.status, args.ok != 0
-}
+//func (t *Trap) ExitStatus() (status int32, ok bool) {
+//	args := struct {
+//		trap   uintptr
+//		status int32
+//		ok     int32
+//	}{
+//		trap: uintptr(unsafe.Pointer(t)),
+//	}
+//	cgo.NonBlocking((*byte)(C.do_wasmtime_trap_exit_status), uintptr(unsafe.Pointer(&args)), 0)
+//	return args.status, args.ok != 0
+//}
 
 type FrameVec struct {
 	vec C.wasm_frame_vec_t

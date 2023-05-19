@@ -200,6 +200,37 @@ func (nr *Bounded[T]) Pop() *T {
 	return result
 }
 
+func (nr *Bounded[T]) PopUnsafe() unsafe.Pointer {
+	//nr.wake = 0
+	atomic.StoreInt64(&nr.wake, 0)
+	var (
+		cell   *node[T]
+		result unsafe.Pointer
+		pos    = atomic.LoadInt64(&nr.head)
+	)
+	for {
+		cell = &nr.nodes[pos&nr.mask]
+		seq := atomic.LoadInt64(&cell.seq)
+		diff := seq - (pos + 1)
+		if diff == 0 {
+			if atomicx.Casint64(&nr.head, pos, pos+1) {
+				//if atomic.CompareAndSwapInt64(&nr.head, pos, pos+1) {
+				break
+			}
+		} else if diff < 0 {
+			return nil
+		} else {
+			pos = atomic.LoadInt64(&nr.head)
+		}
+	}
+
+	result = atomic.LoadPointer(&cell.data)
+	atomic.StorePointer(&cell.data, nil)
+	//result = (*T)(atomic.SwapPointer(&cell.data, nil))
+	atomic.StoreInt64(&cell.seq, pos+nr.mask+1)
+	return result
+}
+
 func (nr *Bounded[T]) PopDeref() (res T) {
 	//nr.wake = 0
 	atomic.StoreInt64(&nr.wake, 0)

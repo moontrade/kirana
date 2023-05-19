@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/hashmap"
 	"github.com/moontrade/kirana/pkg/socket"
 	"github.com/moontrade/kirana/pkg/timex"
 	"golang.org/x/sys/unix"
@@ -14,17 +15,19 @@ import (
 )
 
 type Loop[T any] struct {
-	idx          int
-	poll         *Poll[Conn[T]]
-	ln           *Listener
-	packet       []byte
-	active       counter.Counter
-	conns        map[int]*Conn[T]
-	udpConns     map[int]*Conn[T]
+	idx      int
+	poll     *Poll[Conn[T]]
+	ln       *Listener
+	packet   []byte
+	active   counter.Counter
+	conns    hashmap.Sync[int, *Conn[T]]
+	udpConns hashmap.Sync[int, *Conn[T]]
+	//conns        map[int]*Conn[T]
+	//udpConns     map[int]*Conn[T]
 	count        int32
 	lockThread   bool
 	tick         time.Duration
-	onOpened     func(conn *Conn[T])
+	onOpened     func(conn *Conn[T]) Action
 	onTraffic    func(c *Conn[T], read bool) Action
 	doRead       func(data *Conn[T]) ([]byte, error)
 	doWrite      func(data *Conn[T]) ([]byte, error)
@@ -38,8 +41,8 @@ func NewLoop[T any](ln *Listener) (*Loop[T], error) {
 	l := &Loop[T]{
 		poll:     OpenPoll[Conn[T]](),
 		ln:       ln,
-		conns:    make(map[int]*Conn[T]),
-		udpConns: make(map[int]*Conn[T]),
+		conns:    *hashmap.NewSync[int, *Conn[T]](0, 128, hashmap.HashInt),
+		udpConns: *hashmap.NewSync[int, *Conn[T]](0, 128, hashmap.HashInt),
 	}
 	return l, nil
 }
@@ -63,7 +66,7 @@ func (l *Loop[T]) run() {
 	_ = end
 	_ = nextTick
 
-	onEvent := func(index, count, fd int, conn *Conn[T]) error {
+	onEvent := func(index, count, fd int, filter int16, conn *Conn[T]) error {
 		if fd == acceptFD {
 			return l.accept(fd)
 		}
@@ -111,11 +114,33 @@ func (l *Loop[T]) accept(fd int) error {
 	}
 	c := newTCPConn[T](nfd, l, sa, l.ln.addr, removeAddr)
 
-	l.poll.AddRead(c.fd, c)
-	l.conns[c.fd] = c
+	_ = l.poll.AddRead(c.fd, c)
+	l.conns.Store(c.fd, c)
 	l.active.Incr()
 	c.opened = true
 
+	return nil
+}
+
+func (l *Loop[T]) open(c *Conn[T]) error {
+	action := l.onOpened(c)
+
+	if len(c.wr) > 0 {
+		if err := l.poll.AddReadWrite(c.fd, c); err != nil {
+			return err
+		}
+	}
+
+	return l.handle(c, action)
+}
+
+func (l *Loop[T]) handle(c *Conn[T], action Action) error {
+	switch action {
+	case 0:
+		return nil
+	case 1:
+		return l.closeConn(c, true)
+	}
 	return nil
 }
 
@@ -169,7 +194,7 @@ func (l *Loop[T]) write(c *Conn[T]) error {
 	if len(data) == 0 {
 		// All data have been drained, it's no need to monitor the writable events,
 		// remove the writable event from poller to help the future event-loops.
-		l.poll.ModRead(c.fd, c)
+		_ = l.poll.ModRead(c.fd, c)
 		return nil
 	}
 
@@ -205,7 +230,7 @@ func (l *Loop[T]) closeConn(c *Conn[T], flush bool) error {
 			c.wr = c.wr[n:]
 		}
 	}
-	l.poll.ModDetach(c.fd, c)
+	_ = l.poll.ModDetach(c.fd, c)
 	closeErr := unix.Close(c.fd)
 	var err error
 	if closeErr != nil {
@@ -217,7 +242,7 @@ func (l *Loop[T]) closeConn(c *Conn[T], flush bool) error {
 		}
 	}
 
-	delete(l.conns, c.fd)
+	l.conns.Delete(c.fd)
 	l.active.Decr()
 	return nil
 }

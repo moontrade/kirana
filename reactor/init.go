@@ -3,7 +3,7 @@ package reactor
 import (
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/cow"
-	"github.com/moontrade/kirana/pkg/runtimex"
+	"github.com/moontrade/kirana/pkg/gid"
 	"runtime"
 	"strconv"
 	"sync"
@@ -45,7 +45,7 @@ func NextEventLoop() *Reactor {
 	if len(loops) == 1 {
 		return loops[0]
 	}
-	return loops[runtimex.Pid()%len(loops)]
+	return loops[int(gid.PID())%len(loops)]
 }
 
 func Init(
@@ -79,7 +79,7 @@ func Init(
 			InvokeQSize:  queueSize,
 			WakeQSize:    queueSize,
 			SpawnQSize:   queueSize,
-			LockOSThread: false,
+			LockOSThread: true,
 		})
 		if err != nil {
 			panic(err)

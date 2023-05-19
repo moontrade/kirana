@@ -8,10 +8,35 @@ package netpoll
 
 import "C"
 import (
+	"github.com/moontrade/kirana/pkg/atomicx"
+	"github.com/panjf2000/gnet/v2/pkg/errors"
+	"golang.org/x/sys/unix"
+	"runtime"
 	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
+)
+
+// IOEvent is the integer type of I/O events on BSD's.
+type IOEvent = int16
+
+const (
+	// InitPollEventsCap represents the initial capacity of poller event-list.
+	InitPollEventsCap = 64
+	// MaxPollEventsCap is the maximum limitation of events that the poller can process.
+	MaxPollEventsCap = 512
+	// MinPollEventsCap is the minimum limitation of events that the poller can process.
+	MinPollEventsCap = 16
+	// MaxAsyncTasksAtOneTime is the maximum amount of asynchronous tasks that the event-loop will process at one time.
+	MaxAsyncTasksAtOneTime = 128
+	// EVFilterWrite represents writeable events from sockets.
+	EVFilterWrite = unix.EVFILT_WRITE
+	// EVFilterRead represents readable events from sockets.
+	EVFilterRead = unix.EVFILT_READ
+	// EVFilterSock represents exceptional events that are not read/write, like socket being closed,
+	// reading/writing from/to a closed socket, etc.
+	EVFilterSock = -0xd
 )
 
 var wakeEvents = []syscall.Kevent_t{{
@@ -21,9 +46,8 @@ var wakeEvents = []syscall.Kevent_t{{
 }}
 
 type Poll[T any] struct {
-	fd      int
-	changes []syscall.Kevent_t
-	wait    int32
+	fd   int
+	wait int32
 }
 
 func OpenPoll[T any]() *Poll[T] {
@@ -51,7 +75,9 @@ func (p *Poll[T]) Close() error {
 
 // Wake ...
 func (p *Poll[T]) Wake() error {
-	if atomic.CompareAndSwapInt32(&p.wait, 0, 1) {
+	if atomicx.Casint32(&p.wait, 0, 1) {
+		//if atomicx.Xchgint32(&p.wait, 1) == 0 {
+		//if atomic.CompareAndSwapInt32(&p.wait, 0, 1) {
 		_, err := syscall.Kevent(p.fd, wakeEvents, nil, nil)
 		return err
 	}
@@ -61,7 +87,7 @@ func (p *Poll[T]) Wake() error {
 //goland:noinspection ALL
 func (p *Poll[T]) Wait(
 	timeout time.Duration,
-	onEvent func(index, count, fd int, attachment *T) error,
+	onEvent func(index, count, fd int, filter int16, attachment *T) error,
 	onNextWait func(count int) (time.Duration, error),
 ) error {
 	var (
@@ -74,11 +100,13 @@ func (p *Poll[T]) Wait(
 		err error
 	)
 	for {
-		n, err = syscall.Kevent(p.fd, p.changes, events, &timespec)
-		if err != nil && err != syscall.EINTR {
+		n, err = syscall.Kevent(p.fd, nil, events, &timespec)
+		if n == 0 || (n < 0 && err == syscall.EINTR) {
+			runtime.Gosched()
+			continue
+		} else if err != nil {
 			return err
 		}
-		p.changes = p.changes[:0]
 
 		// Timeout?
 		if n == 0 {
@@ -87,18 +115,23 @@ func (p *Poll[T]) Wait(
 			}
 		}
 
+		var evFilter int16
 		for i := 0; i < n; i++ {
 			event := &events[i]
-			if event.Ident == 0 {
-				if err := onEvent(i, n, 0, nil); err != nil {
-					return err
+			if event.Ident != 0 {
+				evFilter = event.Filter
+				if (event.Flags&unix.EV_EOF != 0) || (event.Flags&unix.EV_ERROR != 0) {
+					evFilter = EVFilterSock
 				}
-
-				//if err := onEvent(0, n, 0, nil); err != nil {
-				//	return err
-				//}
+				attachement := (*T)(unsafe.Pointer(event.Udata))
+				switch err = onEvent(i, n, int(event.Ident), evFilter, attachement); err {
+				case nil:
+				case errors.ErrAcceptSocket, errors.ErrEngineShutdown:
+					return err
+				default:
+				}
 			} else {
-				if err := onEvent(i, n, int(event.Ident), (*T)(unsafe.Pointer(uintptr(event.Data)))); err != nil {
+				if err := onEvent(i, n, int(event.Ident), 0, (*T)(unsafe.Pointer(uintptr(event.Data)))); err != nil {
 					return err
 				}
 			}
@@ -113,71 +146,80 @@ func (p *Poll[T]) Wait(
 }
 
 // AddRead ...
-func (p *Poll[T]) AddRead(fd int, data *T) {
-	p.changes = append(p.changes,
-		syscall.Kevent_t{
-			Ident:  uint64(fd),
-			Flags:  syscall.EV_ADD,
-			Filter: syscall.EVFILT_READ,
-			Data:   int64(uintptr(unsafe.Pointer(data))),
-		},
-	)
+func (p *Poll[T]) AddRead(fd int, data *T) error {
+	var evs [1]syscall.Kevent_t
+	evs[0] = syscall.Kevent_t{
+		Ident:  uint64(fd),
+		Flags:  syscall.EV_ADD,
+		Filter: syscall.EVFILT_READ,
+		Data:   int64(uintptr(unsafe.Pointer(data))),
+	}
+	_, err := syscall.Kevent(p.fd, evs[:], nil, nil)
+	return err
 }
 
 // AddReadWrite ...
-func (p *Poll[T]) AddReadWrite(fd int, data *T) {
-	p.changes = append(p.changes,
-		syscall.Kevent_t{
-			Ident:  uint64(fd),
-			Flags:  syscall.EV_ADD,
-			Filter: syscall.EVFILT_READ,
-			Data:   int64(uintptr(unsafe.Pointer(data))),
-		},
-		syscall.Kevent_t{
-			Ident:  uint64(fd),
-			Flags:  syscall.EV_ADD,
-			Filter: syscall.EVFILT_WRITE,
-			Data:   int64(uintptr(unsafe.Pointer(data))),
-		},
-	)
-}
-
-// ModRead ...
-func (p *Poll[T]) ModRead(fd int, data *T) {
-	p.changes = append(p.changes, syscall.Kevent_t{
+func (p *Poll[T]) AddReadWrite(fd int, data *T) error {
+	var evs [2]syscall.Kevent_t
+	evs[0] = syscall.Kevent_t{
 		Ident:  uint64(fd),
-		Flags:  syscall.EV_DELETE,
-		Filter: syscall.EVFILT_WRITE,
+		Flags:  syscall.EV_ADD,
+		Filter: syscall.EVFILT_READ,
 		Data:   int64(uintptr(unsafe.Pointer(data))),
-	})
-}
-
-// ModReadWrite ...
-func (p *Poll[T]) ModReadWrite(fd int, data *T) {
-	p.changes = append(p.changes, syscall.Kevent_t{
+	}
+	evs[1] = syscall.Kevent_t{
 		Ident:  uint64(fd),
 		Flags:  syscall.EV_ADD,
 		Filter: syscall.EVFILT_WRITE,
 		Data:   int64(uintptr(unsafe.Pointer(data))),
-	})
+	}
+	_, err := syscall.Kevent(p.fd, evs[:], nil, nil)
+	return err
+}
+
+// ModRead ...
+func (p *Poll[T]) ModRead(fd int, data *T) error {
+	var evs [1]syscall.Kevent_t
+	evs[0] = syscall.Kevent_t{
+		Ident:  uint64(fd),
+		Flags:  syscall.EV_DELETE,
+		Filter: syscall.EVFILT_WRITE,
+		Data:   int64(uintptr(unsafe.Pointer(data))),
+	}
+	_, err := syscall.Kevent(p.fd, evs[:], nil, nil)
+	return err
+}
+
+// ModReadWrite ...
+func (p *Poll[T]) ModReadWrite(fd int, data *T) error {
+	var evs [1]syscall.Kevent_t
+	evs[0] = syscall.Kevent_t{
+		Ident:  uint64(fd),
+		Flags:  syscall.EV_ADD,
+		Filter: syscall.EVFILT_WRITE,
+		Data:   int64(uintptr(unsafe.Pointer(data))),
+	}
+	_, err := syscall.Kevent(p.fd, evs[:], nil, nil)
+	return err
 }
 
 // ModDetach ...
-func (p *Poll[T]) ModDetach(fd int, data *T) {
-	p.changes = append(p.changes,
-		syscall.Kevent_t{
-			Ident:  uint64(fd),
-			Flags:  syscall.EV_DELETE,
-			Filter: syscall.EVFILT_READ,
-			Data:   int64(uintptr(unsafe.Pointer(data))),
-		},
-		syscall.Kevent_t{
-			Ident:  uint64(fd),
-			Flags:  syscall.EV_DELETE,
-			Filter: syscall.EVFILT_WRITE,
-			Data:   int64(uintptr(unsafe.Pointer(data))),
-		},
-	)
+func (p *Poll[T]) ModDetach(fd int, data *T) error {
+	var evs [2]syscall.Kevent_t
+	evs[0] = syscall.Kevent_t{
+		Ident:  uint64(fd),
+		Flags:  syscall.EV_DELETE,
+		Filter: syscall.EVFILT_READ,
+		Data:   int64(uintptr(unsafe.Pointer(data))),
+	}
+	evs[1] = syscall.Kevent_t{
+		Ident:  uint64(fd),
+		Flags:  syscall.EV_DELETE,
+		Filter: syscall.EVFILT_WRITE,
+		Data:   int64(uintptr(unsafe.Pointer(data))),
+	}
+	_, err := syscall.Kevent(p.fd, evs[:], nil, nil)
+	return err
 }
 
 //// Dequeue ...

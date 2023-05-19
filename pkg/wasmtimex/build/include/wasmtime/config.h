@@ -80,6 +80,10 @@ enum wasmtime_profiling_strategy_enum { // ProfilingStrategy
   ///
   /// Note that this isn't always enabled at build time.
   WASMTIME_PROFILING_STRATEGY_VTUNE,
+  /// Linux's simple "perfmap" support in `perf` is enabled and when Wasmtime is
+  /// run under `perf` necessary calls will be made to profile generated JIT
+  /// code.
+  WASMTIME_PROFILING_STRATEGY_PERFMAP,
 };
 
 #define WASMTIME_CONFIG_PROP(ret, name, ty) \
@@ -199,6 +203,14 @@ WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
  * This setting is #WASMTIME_STRATEGY_AUTO by default.
  */
 WASMTIME_CONFIG_PROP(void, strategy, wasmtime_strategy_t)
+
+/**
+ * \brief Configure wether wasmtime should compile a module using multiple threads.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.parallel_compilation.
+ */
+WASMTIME_CONFIG_PROP(void, parallel_compilation, bool)
 
 /**
  * \brief Configures whether Cranelift's debug verifier is enabled.

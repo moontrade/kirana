@@ -122,3 +122,12 @@ func (bv *ByteVec) ToOwned() string {
 	bv.Delete()
 	return *(*string)(unsafe.Pointer(&n))
 }
+
+func TempByteVec(b []byte) ByteVec {
+	v := ByteVec{}
+	v.vec.size = C.ulong(uintptr(len(b)))
+	if len(b) > 0 {
+		v.vec.data = (*C.char)(unsafe.Pointer(&b[0]))
+	}
+	return v
+}

@@ -1,3 +1,5 @@
+//go:build tinygo.wasm || 386 || amd64 || amd64p32 || arm || arm64 || loong64 || mips64le || mips64p32 || mips64p32le || mipsle || ppc64le || riscv || riscv64 || wasm
+
 package wasmtimex
 
 /*
@@ -5,9 +7,17 @@ package wasmtimex
 #define WASMTIME_VAL_OF_OFFSET offsetof(struct wasmtime_val, of)
 */
 import "C"
-import "unsafe"
+import (
+	"fmt"
+	"unsafe"
+)
 
-type CValT C.wasmtime_val_t
+func init() {
+	if unsafe.Sizeof(C.wasmtime_val_t{}) != unsafe.Sizeof(Val{}) {
+		panic(fmt.Sprintf("sizeof(wasmtime_val_t) != sizeof(Val): %d != %d",
+			uint(unsafe.Sizeof(C.wasmtime_val_t{})), uint(unsafe.Sizeof(Val{}))))
+	}
+}
 
 //type ValKindT uint8
 //

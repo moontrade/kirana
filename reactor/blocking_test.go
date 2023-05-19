@@ -63,7 +63,8 @@ func TestBlockingPool(t *testing.T) {
 }
 
 func TestBlockingConcurrent(t *testing.T) {
-	bp := blocking
+	//bp := blocking
+	bp := NewBlockingPool(5000, 1000000)
 
 	wg := new(sync.WaitGroup)
 	numThreads := runtime.GOMAXPROCS(0) * 2
@@ -112,8 +113,9 @@ func TestBlockingConcurrent(t *testing.T) {
 }
 
 func BenchmarkBlockingPool(b *testing.B) {
-	bp := blocking
-	//bp := NewBlockingPool(0, b.N*2)
+	//Init(1, Millis500, 1000000, 100000)
+	//bp := blocking
+	bp := NewBlockingPool(0, b.N*2)
 
 	c := new(counter.Counter)
 	fn := func() {
@@ -146,6 +148,7 @@ func BenchmarkBlockingPool(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if !bp.Invoke(fn) {
 			c.Incr()
+			panic("could not invoke")
 			//runtime.Gosched()
 			//for !bp.Invoke(fn) {
 			//	runtime.Gosched()

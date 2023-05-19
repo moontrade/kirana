@@ -5,6 +5,7 @@ import (
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/timex"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"testing"
 	"time"
@@ -13,7 +14,7 @@ import (
 var Started = timex.NanoTime()
 
 func BenchmarkInvoke(b *testing.B) {
-	w, err := NewReactor(Config{Level1Wheel: NewWheel(Millis250), InvokeQSize: 10000000, LockOSThread: false})
+	w, err := NewReactor(Config{Level1Wheel: NewWheel(Millis50), InvokeQSize: 10000000, LockOSThread: true})
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -68,6 +69,8 @@ func BenchmarkInvoke(b *testing.B) {
 		runtime.Gosched()
 	}
 	fmt.Println(c.Load(), b.N-1, "overflow", overflow.Load())
+
+	//time.Sleep(time.Minute)
 }
 
 func TestLoopInvokeConcurrent(t *testing.T) {
@@ -131,6 +134,9 @@ func TestLoopInvokeConcurrent(t *testing.T) {
 }
 
 func TestReactor(t *testing.T) {
+	//debug.SetGCPercent(1000)
+	//debug.SetMemoryLimit(1024 * 1024 * 1024 * 2)
+	debug.SetMemoryLimit(1024 * 1024 * 64)
 	tasks := 500
 	slotSize := 500
 	w, err := NewReactor(Config{Level1Wheel: NewWheel(Millis25)})
@@ -152,12 +158,18 @@ func TestReactor(t *testing.T) {
 	}
 
 	go func() {
+		count := 0
 		var ms runtime.MemStats
 		for {
 			time.Sleep(time.Second * 3)
 			//w.Print()
 			printMemStat(&ms)
 			fmt.Println(c.Load())
+
+			count++
+			if count%10 == 0 {
+				runtime.GC()
+			}
 			//w.Spawn(&OneShot{c: c})
 			//onEntryFn := func() {
 			//
@@ -204,5 +216,5 @@ func printMemStat(ms *runtime.MemStats) {
 	//if (time.Duration(timex.NanoTime()-Started).Truncate(time.Second))%(time.Second*5) == 0 {
 	//	runtime.GC()
 	//}
-	runtime.GC()
+	//runtime.GC()
 }

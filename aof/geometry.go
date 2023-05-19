@@ -1,8 +1,7 @@
 package aof
 
 var (
-	OpenFile   = Geometry{}
-	CreateFile = Geometry{Create: true}
+	OpenFile = Geometry{}
 )
 
 var (
@@ -10,6 +9,10 @@ var (
 	SizeUpperDefault  = int64(1024 * 1024 * 16) // 16MB
 	GrowthStepDefault = pageSize
 )
+
+func CreateFile() *Geometry {
+	return &Geometry{Create: true}
+}
 
 type Geometry struct {
 	SizeNow    int64
@@ -19,14 +22,14 @@ type Geometry struct {
 	Create     bool
 }
 
-func (g Geometry) With(sizeNow, sizeUpper, growthStep int64) Geometry {
+func (g *Geometry) With(sizeNow, sizeUpper, growthStep int64) *Geometry {
 	g.SizeNow = sizeNow
 	g.SizeUpper = sizeUpper
 	g.GrowthStep = growthStep
 	return g
 }
 
-func (g Geometry) WithSizeNow(sizeNow int64) Geometry {
+func (g *Geometry) WithSizeNow(sizeNow int64) *Geometry {
 	g.SizeNow = sizeNow
 	return g
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/moontrade/kirana/pkg/gid"
 	"github.com/moontrade/kirana/pkg/mpmc"
 	"github.com/moontrade/kirana/pkg/pmath"
-	"github.com/moontrade/kirana/pkg/runtimex"
 	"github.com/moontrade/kirana/pkg/spinlock"
 	"math"
 	"runtime"
@@ -132,7 +131,8 @@ func (p *Pool[T]) Shards() []Shard[T] {
 }
 
 func (p *Pool[T]) Shard() *Shard[T] {
-	pid := runtimex.Pid()
+	//pid := runtimex.Pid()
+	pid := int(gid.PID())
 	if len(p.shards) <= pid {
 		return &p.shards[pid]
 	} else {
@@ -145,13 +145,15 @@ func (p *Pool[T]) Get() *T {
 }
 
 func (p *Pool[T]) GetUnsafe() unsafe.Pointer {
-	pid := runtimex.Pid()
+	//pid := runtimex.Pid()
+	pid := int(gid.PID())
 	if pid < len(p.shards) {
 		shard := &p.shards[pid]
 		v := shard.GetUnsafe()
 		return v
 	} else {
-		shard := &p.shards[pid%len(p.shards)]
+		shard := &p.shards[pid&p.mask]
+		//shard := &p.shards[pid%len(p.shards)]
 		v := shard.GetUnsafe()
 		return v
 	}
@@ -163,12 +165,14 @@ func (p *Pool[T]) Put(data *T) {
 	if p.lastMiss.TryPutUnsafe(unsafe.Pointer(data)) {
 		return
 	}
-	pid := runtimex.Pid()
+	//pid := runtimex.Pid()
+	pid := int(gid.PID())
 	if len(p.shards) <= pid {
 		shard := &p.shards[pid]
 		shard.PutUnsafe(unsafe.Pointer(data))
 	} else {
-		shard := &p.shards[pid%len(p.shards)]
+		//shard := &p.shards[pid%len(p.shards)]
+		shard := &p.shards[pid&p.mask]
 		shard.PutUnsafe(unsafe.Pointer(data))
 	}
 }
@@ -177,12 +181,15 @@ func (p *Pool[T]) PutUnsafe(data unsafe.Pointer) {
 	if p.lastMiss.TryPutUnsafe(data) {
 		return
 	}
-	pid := runtimex.Pid()
+
+	//pid := runtimex.Pid()
+	pid := int(gid.PID())
 	if len(p.shards) <= pid {
 		shard := &p.shards[pid]
 		shard.PutUnsafe(data)
 	} else {
-		shard := &p.shards[pid%len(p.shards)]
+		shard := &p.shards[pid&p.mask]
+		//shard := &p.shards[pid%len(p.shards)]
 		shard.PutUnsafe(data)
 	}
 }

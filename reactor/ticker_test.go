@@ -12,7 +12,7 @@ func TestHFTicker(t *testing.T) {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 
-		tick := time.Microsecond * 10000
+		tick := time.Millisecond * 20
 		//tick = time.Millisecond * 500
 		//next := timex.NanoTime() + int64(tick)
 
@@ -31,7 +31,7 @@ func TestHFTicker(t *testing.T) {
 }
 
 func TestTicker(t *testing.T) {
-	ticker := StartTicker(time.Microsecond * 5000)
+	ticker := StartTicker(time.Microsecond * 25000)
 	//var ms runtime.MemStats
 	run := func(dur time.Duration) {
 		ch := make(chan int64, 1)

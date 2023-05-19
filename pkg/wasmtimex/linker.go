@@ -25,6 +25,7 @@ void do_wasmtime_linker_allow_shadowing(size_t arg0, size_t arg1) {
 
 typedef struct do_wasmtime_linker_define_t {
 	size_t linker;
+	size_t store;
 	size_t module;
 	size_t module_len;
 	size_t name;
@@ -37,6 +38,7 @@ void do_wasmtime_linker_define(size_t arg0, size_t arg1) {
 	do_wasmtime_linker_define_t* args = (do_wasmtime_linker_define_t*)(void*)arg0;
 	args->error = (size_t)(void*)wasmtime_linker_define(
 		(wasmtime_linker_t*)args->linker,
+		(wasmtime_context_t*)args->store,
 		(const char*)args->module,
 		args->module_len,
 		(const char*)args->name,
@@ -274,9 +276,10 @@ func (l *Linker) AllowShadowing(allow bool) {
 //
 // For more information about name resolution consult the [Rust
 // documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
-func (l *Linker) Define(module, name string, item *Extern) *Error {
+func (l *Linker) Define(module, name string, store *Context, item *Extern) *Error {
 	args := struct {
 		linker    uintptr
+		store     uintptr
 		module    uintptr
 		moduleLen uintptr
 		name      uintptr
@@ -285,6 +288,7 @@ func (l *Linker) Define(module, name string, item *Extern) *Error {
 		error     uintptr
 	}{
 		linker:    uintptr(unsafe.Pointer(l)),
+		store:     uintptr(unsafe.Pointer(store)),
 		module:    strDataPtr(module),
 		moduleLen: uintptr(len(module)),
 		name:      strDataPtr(name),

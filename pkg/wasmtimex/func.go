@@ -78,7 +78,8 @@ void do_wasmtime_func_call_unchecked(size_t arg0, size_t arg1) {
 	args->trap = (size_t)(void*)wasmtime_func_call_unchecked(
 		(wasmtime_context_t*)(void*)args->context,
 		(const wasmtime_func_t*)(void*)args->func,
-		(wasmtime_val_raw_t*)(void*)args->args
+		(wasmtime_val_raw_t*)(void*)args->args,
+		(wasm_trap_t**)(void*)args->trap
 	);
 }
 
@@ -473,6 +474,7 @@ func (f *Func) CallBlocking(ctx *Context, params, results []Val) (*Trap, *Error)
 //	faster than that function, but the tradeoff is that embeddings must uphold
 //	more invariants rather than relying on Wasmtime to check them for you.
 func (f *Func) CallUnchecked(ctx *Context, argsAndResults []ValRaw) *Trap {
+	var trap *Trap = nil
 	args := struct {
 		context uintptr
 		fn      uintptr
@@ -482,9 +484,10 @@ func (f *Func) CallUnchecked(ctx *Context, argsAndResults []ValRaw) *Trap {
 		context: uintptr(unsafe.Pointer(ctx)),
 		fn:      uintptr(unsafe.Pointer(f)),
 		args:    dataPtr(argsAndResults),
+		trap:    uintptr(unsafe.Pointer(&trap)),
 	}
 	cgo.NonBlocking((*byte)(C.do_wasmtime_func_call_unchecked), uintptr(unsafe.Pointer(&args)), 0)
-	return (*Trap)(unsafe.Pointer(args.trap))
+	return trap
 }
 
 // CallUncheckedBlocking calls a WebAssembly function in an "unchecked" fashion.
@@ -513,6 +516,7 @@ func (f *Func) CallUnchecked(ctx *Context, argsAndResults []ValRaw) *Trap {
 //	faster than that function, but the tradeoff is that embeddings must uphold
 //	more invariants rather than relying on Wasmtime to check them for you.
 func (f *Func) CallUncheckedBlocking(ctx *Context, argsAndResults []Val) *Trap {
+	var trap *Trap = nil
 	args := struct {
 		context uintptr
 		fn      uintptr
@@ -522,9 +526,10 @@ func (f *Func) CallUncheckedBlocking(ctx *Context, argsAndResults []Val) *Trap {
 		context: uintptr(unsafe.Pointer(ctx)),
 		fn:      uintptr(unsafe.Pointer(f)),
 		args:    dataPtr(argsAndResults),
+		trap:    uintptr(unsafe.Pointer(&trap)),
 	}
 	cgo.Blocking((*byte)(C.do_wasmtime_func_call_unchecked), uintptr(unsafe.Pointer(&args)), 0)
-	return (*Trap)(unsafe.Pointer(args.trap))
+	return trap
 }
 
 func (f *Func) AsExtern() Extern {

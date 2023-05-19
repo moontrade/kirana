@@ -37,7 +37,7 @@ func TestTailer(t *testing.T) {
 		os.Remove("testdata/" + name)
 
 		const SIZE = 1024 * 1024 * 1
-		f, err := m.Open(name, CreateFile.WithSizeNow(SIZE*2), RecoveryDefault)
+		f, err := m.Open(name, *CreateFile().WithSizeNow(SIZE * 2), RecoveryDefault)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -48,12 +48,11 @@ func TestTailer(t *testing.T) {
 		}
 		_ = tailer
 		f.Wake()
-		time.Sleep(time.Millisecond)
+		//time.Sleep(time.Millisecond)
 		wakeAttempts := 0
 		if f.readOnly {
-			time.Sleep(time.Second)
+			//time.Sleep(time.Second)
 		} else {
-
 			last := timex.NanoTime()
 			atomic.StoreInt64(&timer, last)
 			for {

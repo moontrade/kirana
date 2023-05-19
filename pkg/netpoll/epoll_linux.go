@@ -82,81 +82,71 @@ const (
 )
 
 // AddReadWrite ...
-func (p *Poll[T]) AddReadWrite(fd int, data *T) {
+func (p *Poll[T]) AddReadWrite(fd int, data *T) error {
 	var ev epollevent
 	ev.events = readWriteEvents
 	*(**T)(unsafe.Pointer(&ev.data)) = data
-	if err := syscall.EpollCtl(
+	return syscall.EpollCtl(
 		p.fd, syscall.EPOLL_CTL_ADD, fd,
 		&ev,
 		//&syscall.EpollEvent{Fd: int32(fd),
 		//	Events: syscall.EPOLLIN | syscall.EPOLLOUT,
 		//},
-	); err != nil {
-		panic(err)
-	}
+	)
 }
 
 // AddRead ...
-func (p *Poll[T]) AddRead(fd int, data *T) {
+func (p *Poll[T]) AddRead(fd int, data *T) error {
 	var ev epollevent
 	ev.events = readEvents
 	*(**T)(unsafe.Pointer(&ev.data)) = data
-	if err := syscall.EpollCtl(
+	return syscall.EpollCtl(
 		p.fd, syscall.EPOLL_CTL_ADD, fd,
 		&ev,
 		//&syscall.EpollEvent{Fd: int32(fd),
 		//	Events: syscall.EPOLLIN,
 		//},
-	); err != nil {
-		panic(err)
-	}
+	)
 }
 
 // ModRead ...
-func (p *Poll[T]) ModRead(fd int, data *T) {
+func (p *Poll[T]) ModRead(fd int, data *T) error {
 	var ev epollevent
 	ev.events = readEvents
 	*(**T)(unsafe.Pointer(&ev.data)) = data
-	if err := syscall.EpollCtl(
+	return syscall.EpollCtl(
 		p.fd, syscall.EPOLL_CTL_MOD, fd,
 		&ev,
 		//&syscall.EpollEvent{Fd: int32(fd),
 		//	Events: syscall.EPOLLIN,
 		//},
-	); err != nil {
-		panic(err)
-	}
+	)
 }
 
 // ModReadWrite ...
-func (p *Poll[T]) ModReadWrite(fd int, data *T) {
+func (p *Poll[T]) ModReadWrite(fd int, data *T) error {
 	var ev epollevent
 	ev.events = readWriteEvents
 	*(**T)(unsafe.Pointer(&ev.data)) = data
-	if err := syscall.EpollCtl(
+	return syscall.EpollCtl(
 		p.fd, syscall.EPOLL_CTL_MOD, fd,
 		&ev,
 		//&syscall.EpollEvent{Fd: int32(fd),
 		//	Events: syscall.EPOLLIN | syscall.EPOLLOUT,
 		//},
-	); err != nil {
-		panic(err)
-	}
+	)
 }
 
 // ModDetach ...
-func (p *Poll[T]) ModDetach(fd int, data *T) {
+func (p *Poll[T]) ModDetach(fd int, data *T) error {
 	var ev epollevent
 	ev.events = syscall.EPOLLIN | syscall.EPOLLOUT
 	*(**T)(unsafe.Pointer(&ev.data)) = data
-	if err := syscall.EpollCtl(
+	return syscall.EpollCtl(
 		p.fd, syscall.EPOLL_CTL_DEL, fd,
 		&ev,
 		//&syscall.EpollEvent{Fd: int32(fd),
 		//	Events: syscall.EPOLLIN | syscall.EPOLLOUT,
 		//},
-	); err != nil {
-		panic(err)
-	}
+	)
 }
