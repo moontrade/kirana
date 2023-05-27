@@ -11,29 +11,29 @@ import (
 Fastest for a single thread, but scales worse than relaxed
 atomic.CompareAndSwapUint32
 BenchmarkSpinLock_Lock/Spinlock_1_thread
-BenchmarkSpinLock_Lock/Spinlock_1_thread-8         	140501175	         8.138 ns/op
+BenchmarkSpinLock_Lock/Spinlock_1_thread-8         	132013696	        10.19 ns/op
 BenchmarkSpinLock_Lock/Spinlock_2_threads
-BenchmarkSpinLock_Lock/Spinlock_2_threads-8        	37530150	        36.43 ns/op
+BenchmarkSpinLock_Lock/Spinlock_2_threads-8        	30107350	        39.78 ns/op
 BenchmarkSpinLock_Lock/Spinlock_4_threads
-BenchmarkSpinLock_Lock/Spinlock_4_threads-8        	17327236	        69.52 ns/op
+BenchmarkSpinLock_Lock/Spinlock_4_threads-8        	11628802	        97.60 ns/op
 BenchmarkSpinLock_Lock/Spinlock_8_threads
-BenchmarkSpinLock_Lock/Spinlock_8_threads-8        	 8597024	       136.5 ns/op
-BenchmarkSpinLock_Lock/RWSpinlock_1_thread
-BenchmarkSpinLock_Lock/RWSpinlock_1_thread-8       	88241509	        13.49 ns/op
-BenchmarkSpinLock_Lock/RWSpinlock_2_threads
-BenchmarkSpinLock_Lock/RWSpinlock_2_threads-8      	24819048	        48.26 ns/op
-BenchmarkSpinLock_Lock/RWSpinlock_4_threads
-BenchmarkSpinLock_Lock/RWSpinlock_4_threads-8      	11941560	       100.5 ns/op
-BenchmarkSpinLock_Lock/RWSpinlock_8_threads
-BenchmarkSpinLock_Lock/RWSpinlock_8_threads-8      	 5646890	       212.5 ns/op
+BenchmarkSpinLock_Lock/Spinlock_8_threads-8        	 6450618	       194.8 ns/op
+BenchmarkSpinLock_Lock/Spinlock_16_threads
+BenchmarkSpinLock_Lock/Spinlock_16_threads-8       	 3200056	       364.5 ns/op
+BenchmarkSpinLock_Lock/Spinlock_32_threads
+BenchmarkSpinLock_Lock/Spinlock_32_threads-8       	 1621352	       718.4 ns/op
+BenchmarkSpinLock_Lock/Spinlock_64_threads
+BenchmarkSpinLock_Lock/Spinlock_64_threads-8       	  858578	      1349 ns/op
+BenchmarkSpinLock_Lock/Spinlock_128_threads
+BenchmarkSpinLock_Lock/Spinlock_128_threads-8      	  449179	      2666 ns/op
 BenchmarkSpinLock_Lock/sync.Mutex
-BenchmarkSpinLock_Lock/sync.Mutex-8                	88138082	        13.49 ns/op
+BenchmarkSpinLock_Lock/sync.Mutex-8                	82373029	        14.14 ns/op
 BenchmarkSpinLock_Lock/sync.Mutex_2_threads
-BenchmarkSpinLock_Lock/sync.Mutex_2_threads-8      	13211614	        94.01 ns/op
+BenchmarkSpinLock_Lock/sync.Mutex_2_threads-8      	13114705	        85.34 ns/op
 BenchmarkSpinLock_Lock/sync.Mutex_4_threads
-BenchmarkSpinLock_Lock/sync.Mutex_4_threads-8      	 4607575	       272.2 ns/op
+BenchmarkSpinLock_Lock/sync.Mutex_4_threads-8      	 4552674	       267.0 ns/op
 BenchmarkSpinLock_Lock/sync.Mutex_8_threads
-BenchmarkSpinLock_Lock/sync.Mutex_8_threads-8      	 1907782	       631.5 ns/op
+BenchmarkSpinLock_Lock/sync.Mutex_8_threads-8      	 1838487	       660.6 ns/op
 BenchmarkSpinLock_Lock/sync.RWMutex
 BenchmarkSpinLock_Lock/sync.RWMutex-8              	62983033	        18.50 ns/op
 BenchmarkSpinLock_Lock/sync.RWMutex_2_threads
@@ -44,15 +44,23 @@ BenchmarkSpinLock_Lock/sync.RWMutex_8_threads
 BenchmarkSpinLock_Lock/sync.RWMutex_8_threads-8    	 1218156	       983.8 ns/op
 
 Relaxed CAS and Add scales a better
-atomic_internal.Cas
+atomicx.Cas
 BenchmarkSpinLock_Lock/Spinlock_1_thread
-BenchmarkSpinLock_Lock/Spinlock_1_thread-8         	137080747	         8.331 ns/op
+BenchmarkSpinLock_Lock/Spinlock_1_thread-8         	100000000	        11.29 ns/op
 BenchmarkSpinLock_Lock/Spinlock_2_threads
-BenchmarkSpinLock_Lock/Spinlock_2_threads-8        	46482424	        27.03 ns/op
+BenchmarkSpinLock_Lock/Spinlock_2_threads-8        	40295838	        31.05 ns/op
 BenchmarkSpinLock_Lock/Spinlock_4_threads
-BenchmarkSpinLock_Lock/Spinlock_4_threads-8        	19519190	        65.61 ns/op
+BenchmarkSpinLock_Lock/Spinlock_4_threads-8        	18351745	        60.53 ns/op
 BenchmarkSpinLock_Lock/Spinlock_8_threads
-BenchmarkSpinLock_Lock/Spinlock_8_threads-8        	 9223419	       132.2 ns/op
+BenchmarkSpinLock_Lock/Spinlock_8_threads-8        	 7288578	       143.4 ns/op
+BenchmarkSpinLock_Lock/Spinlock_16_threads
+BenchmarkSpinLock_Lock/Spinlock_16_threads-8       	 4382174	       263.5 ns/op
+BenchmarkSpinLock_Lock/Spinlock_32_threads
+BenchmarkSpinLock_Lock/Spinlock_32_threads-8       	 2172364	       532.8 ns/op
+BenchmarkSpinLock_Lock/Spinlock_64_threads
+BenchmarkSpinLock_Lock/Spinlock_64_threads-8       	 1183586	      1129 ns/op
+BenchmarkSpinLock_Lock/Spinlock_128_threads
+BenchmarkSpinLock_Lock/Spinlock_128_threads-8      	  509406	      2247 ns/op
 BenchmarkSpinLock_Lock/RWSpinlock_1_thread
 BenchmarkSpinLock_Lock/RWSpinlock_1_thread-8       	100000000	        11.78 ns/op
 BenchmarkSpinLock_Lock/RWSpinlock_2_threads
@@ -80,7 +88,8 @@ BenchmarkSpinLock_Lock/sync.RWMutex_8_threads-8    	 1000000	      1046 ns/op
 */
 func BenchmarkSpinLock_Lock(b *testing.B) {
 	var (
-		rw = false
+		rw      = false
+		syncStd = false
 	)
 	b.Run("Spinlock 1 thread", func(b *testing.B) {
 		l := new(Mutex)
@@ -130,6 +139,74 @@ func BenchmarkSpinLock_Lock(b *testing.B) {
 			wg = new(sync.WaitGroup)
 		)
 		for i := 0; i < 8; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < b.N; i++ {
+					l.Lock()
+					l.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+	})
+	b.Run("Spinlock 16 threads", func(b *testing.B) {
+		var (
+			l  = new(Mutex)
+			wg = new(sync.WaitGroup)
+		)
+		for i := 0; i < 16; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < b.N; i++ {
+					l.Lock()
+					l.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+	})
+	b.Run("Spinlock 32 threads", func(b *testing.B) {
+		var (
+			l  = new(Mutex)
+			wg = new(sync.WaitGroup)
+		)
+		for i := 0; i < 32; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < b.N; i++ {
+					l.Lock()
+					l.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+	})
+	b.Run("Spinlock 64 threads", func(b *testing.B) {
+		var (
+			l  = new(Mutex)
+			wg = new(sync.WaitGroup)
+		)
+		for i := 0; i < 64; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < b.N; i++ {
+					l.Lock()
+					l.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+	})
+	b.Run("Spinlock 128 threads", func(b *testing.B) {
+		var (
+			l  = new(Mutex)
+			wg = new(sync.WaitGroup)
+		)
+		for i := 0; i < 128; i++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -204,78 +281,17 @@ func BenchmarkSpinLock_Lock(b *testing.B) {
 		})
 	}
 
-	b.Run("sync.Mutex", func(b *testing.B) {
-		l := new(sync.Mutex)
-		for i := 0; i < b.N; i++ {
-			l.Lock()
-			l.Unlock()
-		}
-	})
-	b.Run("sync.Mutex 2 threads", func(b *testing.B) {
-		var (
-			l  = new(sync.Mutex)
-			wg = new(sync.WaitGroup)
-		)
-		for i := 0; i < 2; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for i := 0; i < b.N; i++ {
-					l.Lock()
-					l.Unlock()
-				}
-			}()
-		}
-		wg.Wait()
-	})
-	b.Run("sync.Mutex 4 threads", func(b *testing.B) {
-		var (
-			l  = new(sync.Mutex)
-			wg = new(sync.WaitGroup)
-		)
-		for i := 0; i < 4; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for i := 0; i < b.N; i++ {
-					l.Lock()
-					l.Unlock()
-				}
-			}()
-		}
-		wg.Wait()
-	})
-	b.Run("sync.Mutex 8 threads", func(b *testing.B) {
-		var (
-			l  = new(sync.Mutex)
-			wg = new(sync.WaitGroup)
-		)
-		for i := 0; i < 8; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for i := 0; i < b.N; i++ {
-					l.Lock()
-					l.Unlock()
-				}
-			}()
-		}
-		wg.Wait()
-	})
-
-	if rw {
-		b.Run("sync.RWMutex", func(b *testing.B) {
-			var (
-				l = new(sync.RWMutex)
-			)
+	if syncStd {
+		b.Run("sync.Mutex", func(b *testing.B) {
+			l := new(sync.Mutex)
 			for i := 0; i < b.N; i++ {
 				l.Lock()
 				l.Unlock()
 			}
 		})
-		b.Run("sync.RWMutex 2 threads", func(b *testing.B) {
+		b.Run("sync.Mutex 2 threads", func(b *testing.B) {
 			var (
-				l  = new(sync.RWMutex)
+				l  = new(sync.Mutex)
 				wg = new(sync.WaitGroup)
 			)
 			for i := 0; i < 2; i++ {
@@ -290,9 +306,9 @@ func BenchmarkSpinLock_Lock(b *testing.B) {
 			}
 			wg.Wait()
 		})
-		b.Run("sync.RWMutex 4 threads", func(b *testing.B) {
+		b.Run("sync.Mutex 4 threads", func(b *testing.B) {
 			var (
-				l  = new(sync.RWMutex)
+				l  = new(sync.Mutex)
 				wg = new(sync.WaitGroup)
 			)
 			for i := 0; i < 4; i++ {
@@ -307,9 +323,9 @@ func BenchmarkSpinLock_Lock(b *testing.B) {
 			}
 			wg.Wait()
 		})
-		b.Run("sync.RWMutex 8 threads", func(b *testing.B) {
+		b.Run("sync.Mutex 8 threads", func(b *testing.B) {
 			var (
-				l  = new(sync.RWMutex)
+				l  = new(sync.Mutex)
 				wg = new(sync.WaitGroup)
 			)
 			for i := 0; i < 8; i++ {
@@ -324,6 +340,69 @@ func BenchmarkSpinLock_Lock(b *testing.B) {
 			}
 			wg.Wait()
 		})
+
+		if rw {
+			b.Run("sync.RWMutex", func(b *testing.B) {
+				var (
+					l = new(sync.RWMutex)
+				)
+				for i := 0; i < b.N; i++ {
+					l.Lock()
+					l.Unlock()
+				}
+			})
+			b.Run("sync.RWMutex 2 threads", func(b *testing.B) {
+				var (
+					l  = new(sync.RWMutex)
+					wg = new(sync.WaitGroup)
+				)
+				for i := 0; i < 2; i++ {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						for i := 0; i < b.N; i++ {
+							l.Lock()
+							l.Unlock()
+						}
+					}()
+				}
+				wg.Wait()
+			})
+			b.Run("sync.RWMutex 4 threads", func(b *testing.B) {
+				var (
+					l  = new(sync.RWMutex)
+					wg = new(sync.WaitGroup)
+				)
+				for i := 0; i < 4; i++ {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						for i := 0; i < b.N; i++ {
+							l.Lock()
+							l.Unlock()
+						}
+					}()
+				}
+				wg.Wait()
+			})
+			b.Run("sync.RWMutex 8 threads", func(b *testing.B) {
+				var (
+					l  = new(sync.RWMutex)
+					wg = new(sync.WaitGroup)
+				)
+				for i := 0; i < 8; i++ {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						for i := 0; i < b.N; i++ {
+							l.Lock()
+							l.Unlock()
+						}
+					}()
+				}
+				wg.Wait()
+			})
+		}
 	}
 }
 

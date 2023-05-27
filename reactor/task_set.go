@@ -116,7 +116,7 @@ func (tl *TaskSet) SpawnOn(reactor *Reactor, future FutureTask) (*Task, error) {
 		taskPool.Put(task)
 		return nil, err
 	}
-	if !reactor.spawnQ.Push(task) {
+	if !reactor.spawnQ.Enqueue(task) {
 		return nil, ErrQueueFull
 	}
 	return task, nil
@@ -150,7 +150,7 @@ func (tl *TaskSet) SpawnIntervalOn(
 		taskPool.Put(task)
 		return nil, err
 	}
-	if !reactor.spawnQ.Push(task) {
+	if !reactor.spawnQ.Enqueue(task) {
 		return nil, ErrQueueFull
 	}
 	return task, nil

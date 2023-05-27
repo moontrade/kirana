@@ -3,13 +3,12 @@ package reactor
 import (
 	"context"
 	"github.com/moontrade/kirana/pkg/counter"
-	"github.com/moontrade/kirana/pkg/mpsc"
+	"github.com/moontrade/kirana/pkg/mpmc"
 	"github.com/moontrade/kirana/pkg/pmath"
 	"github.com/moontrade/kirana/pkg/runtimex"
 	"github.com/moontrade/kirana/pkg/timex"
 	"github.com/moontrade/kirana/pkg/util"
 	logger "github.com/moontrade/log"
-	"math"
 	"runtime"
 	"sync"
 	"time"
@@ -59,7 +58,7 @@ func NewBlockingPool(numWorkers, queueSize int) *BlockingPool {
 		worker := &blockingWorker{
 			pool:    bp,
 			started: bp.started,
-			queue:   mpsc.NewBounded[func()](int64(queueSize), nil),
+			queue:   mpmc.NewBoundedWake[func()](int64(queueSize), nil),
 			wg:      sync.WaitGroup{},
 		}
 		worker.ctx, worker.cancel = context.WithCancel(context.Background())
@@ -81,13 +80,13 @@ func (b *BlockingPool) Close() error {
 
 func (b *BlockingPool) Invoke(fn func()) bool {
 	worker := b.workers[b.jobs.Incr()&b.workersMask]
-	return worker.queue.PushUnsafe(runtimex.FuncToPointer(fn))
+	return worker.queue.EnqueueUnsafe(runtimex.FuncToPointer(fn))
 }
 
 type blockingWorker struct {
 	pool       *BlockingPool
 	started    int64
-	queue      *mpsc.Bounded[func()]
+	queue      *mpmc.BoundedWake[func()]
 	ctx        context.Context
 	cancel     context.CancelFunc
 	wg         sync.WaitGroup
@@ -138,9 +137,10 @@ func (w *blockingWorker) run() {
 	}
 Loop:
 	for {
-		n := queue.PopManyDeref(math.MaxUint32, onTask)
+		fn := queue.DequeueDeref()
+		//n := queue.DequeueManyDeref(math.MaxUint32, onTask)
 
-		if n == 0 {
+		if fn == nil {
 			w.pool.idleCount.Incr()
 			//timer.Reset(Time.Hour)
 			select {
@@ -153,20 +153,9 @@ Loop:
 				break Loop
 			}
 		} else {
-			runtime.Gosched()
+			onTask(fn)
 			continue
 		}
-
-		//runtime.Gosched()
-		//n, _ = queue.PopMany(math.MaxUint32, onTask)
-
-		//timer.Reset(Time.Hour)
-		//select {
-		//case <-queueWake:
-		////case <-timer.C:
-		//case <-done:
-		//	break Reactor
-		//}
 	}
 }
 

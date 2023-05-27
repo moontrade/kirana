@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/moontrade/kirana/pkg/counter"
-	"github.com/moontrade/kirana/pkg/mpsc"
+	"github.com/moontrade/kirana/pkg/mpmc"
 	"github.com/moontrade/kirana/pkg/timex"
 	logger "github.com/moontrade/log"
 	"github.com/panjf2000/ants"
@@ -96,8 +96,8 @@ func BenchmarkWorker(b *testing.B) {
 
 	for c.Load() < int64(b.N)/2 {
 		runtime.Gosched()
-		//Time.Sleep(Time.Millisecond * 500)
-		//fmt.Println("PROGRESS: failed count", failed.Load(), "iterations", c.Load(), "of", b.N)
+		time.Sleep(time.Millisecond * 500)
+		fmt.Println("PROGRESS: failed count", failed.Load(), "iterations", c.Load(), "of", b.N)
 	}
 
 	b.StopTimer()
@@ -203,7 +203,7 @@ func BenchmarkGopool(b *testing.B) {
 }
 
 type MPSCWorker struct {
-	queue mpsc.Bounded[int]
+	queue mpmc.BoundedWake[int]
 }
 
 type ChanWorker struct {
@@ -213,10 +213,10 @@ type ChanWorker struct {
 func BenchmarkQueues(b *testing.B) {
 	b.Run("mpsc", func(b *testing.B) {
 		var counter counter.Counter
-		q := mpsc.NewBounded[int](16, make(chan int64, 1))
+		q := mpmc.NewBoundedWake[int](16, make(chan int64, 1))
 		go func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
+			//runtime.LockOSThread()
+			//defer runtime.UnlockOSThread()
 
 			exit := false
 			pop := func(v *int) {
@@ -227,7 +227,7 @@ func BenchmarkQueues(b *testing.B) {
 			}
 			_ = pop
 			for !exit {
-				v := q.PopUnsafe()
+				v := q.DequeueUnsafe()
 				if v == nil {
 					runtime.Gosched()
 					continue
@@ -237,7 +237,7 @@ func BenchmarkQueues(b *testing.B) {
 					return
 				}
 				counter.Incr()
-				//if q.PopMany(math.MaxUint32, pop) == 0 {
+				//if q.DequeueMany(math.MaxUint32, pop) == 0 {
 				//	runtime.Gosched()
 				//}
 			}
@@ -246,11 +246,12 @@ func BenchmarkQueues(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
-		for i := 1; i < b.N; i++ {
-			for !q.PushUnsafe(unsafe.Pointer(uintptr(i))) {
+		for i := 0; i < b.N; i++ {
+			for !q.EnqueueUnsafe(unsafe.Pointer(uintptr(i))) {
+				//runtime.Gosched()
 			}
 		}
-		q.PushUnsafe(unsafe.Pointer(uintptr(math.MaxUint64)))
+		//q.EnqueueUnsafe(unsafe.Pointer(uintptr(math.MaxUint64)))
 
 		for counter.Load() < int64(b.N-1) {
 			runtime.Gosched()

@@ -11,30 +11,40 @@ import (
 // Pool is unlikely the ideal choice for sizes larger than 8kb. Best use cases
 // are a lot of smallish allocations and frees with high contention.
 type SizeClasses struct {
-	Size8    SlabConfig
-	Size16   SlabConfig
-	Size32   SlabConfig
-	Size64   SlabConfig
-	Size128  SlabConfig
-	Size256  SlabConfig
-	Size512  SlabConfig
-	Size1KB  SlabConfig
-	Size2KB  SlabConfig
-	Size4KB  SlabConfig
-	Size8KB  SlabConfig
-	Size16KB SlabConfig
-	Size32KB SlabConfig
-	Size64KB SlabConfig
+	Size8    SizeClass
+	Size16   SizeClass
+	Size32   SizeClass
+	Size64   SizeClass
+	Size128  SizeClass
+	Size256  SizeClass
+	Size512  SizeClass
+	Size1K   SizeClass
+	Size2K   SizeClass
+	Size4K   SizeClass
+	Size8K   SizeClass
+	Size16K  SizeClass
+	Size32K  SizeClass
+	Size64K  SizeClass
+	Size128K SizeClass
+	Size256K SizeClass
+	Size512K SizeClass
+	Size1M   SizeClass
+	Size2M   SizeClass
+	Size4M   SizeClass
+	Size8M   SizeClass
+	Size16M  SizeClass
+	Size32M  SizeClass
+	Size64M  SizeClass
 }
 
-// SlabConfig configures the maximum number of pages and the size of each page.
-type SlabConfig struct {
+// SizeClass configures the maximum number of pages and the size of each page.
+type SizeClass struct {
+	Size     int64
 	PageSize int64
-	MaxPages int64
 }
 
-func (sc *SlabConfig) IsActive() bool {
-	return sc.PageSize > 0 && sc.MaxPages > 0
+func (sc *SizeClass) IsActive() bool {
+	return sc.PageSize > 0
 }
 
 type Slices[T any] struct {
@@ -44,11 +54,11 @@ type Slices[T any] struct {
 	missCount counter.Counter
 }
 
-func newSlicePool[T any](sizeClass int, shardConfig SlabConfig) *Pool[[]T] {
+func newSlicePool[T any](sizeClass int, numShards int, shardConfig SizeClass) *Pool[[]T] {
 	return NewPool[[]T](Config[[]T]{
-		SizeClass:     sizeClass,
-		PageSize:      shardConfig.PageSize,
-		PagesPerShard: shardConfig.MaxPages,
+		SizeClass: sizeClass,
+		NumShards: numShards,
+		PageSize:  shardConfig.PageSize,
 		AllocFunc: func() unsafe.Pointer {
 			a := make([]T, sizeClass)
 			return unsafe.Pointer(&a[0])
@@ -69,52 +79,79 @@ func NewSlices[T any](config *Config[[]T], sizes *SizeClasses) *Slices[T] {
 	}
 	pools := make([]*Pool[[]T], 65)
 	if sizes.Size8.IsActive() {
-		pools[0] = newSlicePool[T](8, sizes.Size8)
+		pools[0] = newSlicePool[T](8, config.NumShards, sizes.Size8)
 		pools[1] = pools[0]
 		pools[2] = pools[0]
 		pools[3] = pools[0]
 	}
 	if sizes.Size16.IsActive() {
-		pools[4] = newSlicePool[T](16, sizes.Size16)
+		pools[4] = newSlicePool[T](16, config.NumShards, sizes.Size16)
 	}
 	if sizes.Size32.IsActive() {
-		pools[5] = newSlicePool[T](32, sizes.Size32)
+		pools[5] = newSlicePool[T](32, config.NumShards, sizes.Size32)
 	}
 	if sizes.Size64.IsActive() {
-		pools[6] = newSlicePool[T](64, sizes.Size64)
+		pools[6] = newSlicePool[T](64, config.NumShards, sizes.Size64)
 	}
 	if sizes.Size128.IsActive() {
-		pools[7] = newSlicePool[T](128, sizes.Size128)
+		pools[7] = newSlicePool[T](128, config.NumShards, sizes.Size128)
 	}
 	if sizes.Size256.IsActive() {
-		pools[8] = newSlicePool[T](256, sizes.Size256)
+		pools[8] = newSlicePool[T](256, config.NumShards, sizes.Size256)
 	}
 	if sizes.Size512.IsActive() {
-		pools[9] = newSlicePool[T](512, sizes.Size512)
+		pools[9] = newSlicePool[T](512, config.NumShards, sizes.Size512)
 	}
-	if sizes.Size1KB.IsActive() {
-		pools[10] = newSlicePool[T](1024, sizes.Size1KB)
+	if sizes.Size1K.IsActive() {
+		pools[10] = newSlicePool[T](1024, config.NumShards, sizes.Size1K)
 	}
-	if sizes.Size2KB.IsActive() {
-		pools[11] = newSlicePool[T](2048, sizes.Size2KB)
+	if sizes.Size2K.IsActive() {
+		pools[11] = newSlicePool[T](2048, config.NumShards, sizes.Size2K)
 	}
-	if sizes.Size4KB.IsActive() {
-		pools[12] = newSlicePool[T](4096, sizes.Size4KB)
+	if sizes.Size4K.IsActive() {
+		pools[12] = newSlicePool[T](4096, config.NumShards, sizes.Size4K)
 	}
-	if sizes.Size8KB.IsActive() {
-		pools[13] = newSlicePool[T](8192, sizes.Size8KB)
+	if sizes.Size8K.IsActive() {
+		pools[13] = newSlicePool[T](8192, config.NumShards, sizes.Size8K)
 	}
-	if sizes.Size16KB.IsActive() {
-		pools[14] = newSlicePool[T](16384, sizes.Size16KB)
+	if sizes.Size16K.IsActive() {
+		pools[14] = newSlicePool[T](16384, config.NumShards, sizes.Size16K)
 	}
-	if sizes.Size32KB.IsActive() {
-		pools[15] = newSlicePool[T](32768, sizes.Size32KB)
+	if sizes.Size32K.IsActive() {
+		pools[15] = newSlicePool[T](32768, config.NumShards, sizes.Size32K)
 	}
-	if sizes.Size64KB.IsActive() {
-		pools[16] = newSlicePool[T](65536, sizes.Size64KB)
+	if sizes.Size64K.IsActive() {
+		pools[16] = newSlicePool[T](65536, config.NumShards, sizes.Size64K)
 	}
-	if sizes.Size64KB.IsActive() {
-		pools[17] = newSlicePool[T](65536*2, sizes.Size64KB)
+	if sizes.Size128K.IsActive() {
+		pools[17] = newSlicePool[T](65536*2, config.NumShards, sizes.Size128K)
+	}
+	if sizes.Size256K.IsActive() {
+		pools[18] = newSlicePool[T](65536*4, config.NumShards, sizes.Size256K)
+	}
+	if sizes.Size512K.IsActive() {
+		pools[19] = newSlicePool[T](65536*8, config.NumShards, sizes.Size512K)
+	}
+	if sizes.Size1M.IsActive() {
+		pools[20] = newSlicePool[T](65536*16, config.NumShards, sizes.Size1M)
+	}
+	if sizes.Size2M.IsActive() {
+		pools[21] = newSlicePool[T](65536*32, config.NumShards, sizes.Size2M)
+	}
+	if sizes.Size4M.IsActive() {
+		pools[22] = newSlicePool[T](65536*64, config.NumShards, sizes.Size4M)
+	}
+	if sizes.Size8M.IsActive() {
+		pools[23] = newSlicePool[T](65536*128, config.NumShards, sizes.Size8M)
+	}
+	if sizes.Size16M.IsActive() {
+		pools[24] = newSlicePool[T](65536*256, config.NumShards, sizes.Size16M)
+	}
+	if sizes.Size32M.IsActive() {
+		pools[25] = newSlicePool[T](65536*512, config.NumShards, sizes.Size32M)
+	}
+	if sizes.Size64M.IsActive() {
+		pools[26] = newSlicePool[T](65536*1024, config.NumShards, sizes.Size64M)
 	}
 	return &Slices[T]{
 		pools:   pools,
@@ -216,6 +253,7 @@ func (s SlicesSlab[T]) PutZeroed(data []T) {
 	if cap(data) == 0 {
 		return
 	}
+	data = data[:cap(data)]
 	if s.p.ptrData > 0 {
 		memclrHasPointers(unsafe.Pointer(&data[0]), uintptr(cap(data)*s.p.sizeOf))
 	} else {

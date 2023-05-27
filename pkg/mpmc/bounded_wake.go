@@ -1,75 +1,89 @@
 package mpmc
 
 import (
+	"github.com/moontrade/kirana/pkg/atomicx"
+	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/pmath"
-	"golang.org/x/sys/cpu"
 	"reflect"
 	"runtime"
 	"sync/atomic"
 	"unsafe"
 )
 
-const CacheLinePad = unsafe.Sizeof(cpu.CacheLinePad{})
-
-type node[T any] struct {
-	seq  int64
-	data unsafe.Pointer
-	//_    [CacheLinePad - 16]byte
+// BoundedWake implements a bounded MPMC queue that supports automatic goroutine
+// wake mechanism when a new message is enqueued that changes the length from 0 to 1.
+type BoundedWake[T any] struct {
+	head          int64
+	_             [CacheLinePad - 8]byte
+	tail          int64
+	_             [CacheLinePad - 8]byte
+	nodes         []node[T]
+	mask          int64
+	_             [CacheLinePad - unsafe.Sizeof(reflect.SliceHeader{}) - 8]byte
+	wake          int64
+	_             [CacheLinePad - 8]byte
+	wakeCh        chan int64
+	wakeCount     counter.Counter
+	wakeFull      counter.Counter
+	overflowCount counter.Counter
 }
 
-// Bounded implements a circular buffer.
-type Bounded[T any] struct {
-	head  int64
-	_     [CacheLinePad - 8]byte
-	tail  int64
-	_     [CacheLinePad - 8]byte
-	nodes []node[T]
-	mask  int64
-	_     [CacheLinePad - unsafe.Sizeof(reflect.SliceHeader{}) - 8]byte
-	wake  int64
-	_     [CacheLinePad - 8]byte
-}
-
-// NewBounded returns the RingBuffer object
-func NewBounded[T any](capacity int64) *Bounded[T] {
-	if capacity < 4 {
-		capacity = 4
+// NewBoundedWake returns the RingBuffer object
+func NewBoundedWake[T any](capacity int64, wake chan int64) *BoundedWake[T] {
+	if wake == nil {
+		wake = make(chan int64, 1)
+	}
+	if capacity <= 32 {
+		capacity = 32
 	}
 	capacity = int64(pmath.CeilToPowerOf2(int(capacity)))
 	nodes := make([]node[T], capacity)
 	for i := 0; i < len(nodes); i++ {
-		//n := &nodes[i]
-		atomic.StoreInt64(&nodes[i].seq, int64(i))
+		n := &nodes[i]
+		atomic.StoreInt64(&n.seq, int64(i))
 	}
-	return &Bounded[T]{
-		head:  0,
-		tail:  0,
-		mask:  capacity - 1,
-		nodes: nodes,
+	return &BoundedWake[T]{
+		head:   0,
+		tail:   0,
+		mask:   capacity - 1,
+		wakeCh: wake,
+		nodes:  nodes,
 	}
 }
 
-func (b *Bounded[T]) Len() int {
+func (b *BoundedWake[T]) WakeCount() int64 {
+	return b.wakeCount.Load()
+}
+
+func (b *BoundedWake[T]) WakeChanFullCount() int64 {
+	return b.wakeFull.Load()
+}
+
+func (b *BoundedWake[T]) Wake() <-chan int64 {
+	return b.wakeCh
+}
+
+func (b *BoundedWake[T]) Len() int {
 	return int(atomic.LoadInt64(&b.tail) - atomic.LoadInt64(&b.head))
 }
 
-func (b *Bounded[T]) Cap() int {
+func (b *BoundedWake[T]) Cap() int {
 	return len(b.nodes)
 }
 
-func (b *Bounded[T]) IsFull() bool {
+func (b *BoundedWake[T]) IsFull() bool {
 	return atomic.LoadInt64(&b.tail)-atomic.LoadInt64(&b.head) >= (b.mask)
 }
 
-func (b *Bounded[T]) IsEmpty() bool {
+func (b *BoundedWake[T]) IsEmpty() bool {
 	return atomic.LoadInt64(&b.tail)-atomic.LoadInt64(&b.head) == 0
 }
 
-func (b *Bounded[T]) Processed() int {
+func (b *BoundedWake[T]) Processed() int {
 	return int(atomic.LoadInt64(&b.tail))
 }
 
-func (b *Bounded[T]) Enqueue(data *T) bool {
+func (b *BoundedWake[T]) Enqueue(data *T) bool {
 	if data == nil {
 		return false
 	}
@@ -88,10 +102,10 @@ func (b *Bounded[T]) Enqueue(data *T) bool {
 			}
 			//pos = atomic.LoadInt64(&b.tail)
 		} else if diff < 0 {
+			runtime.Gosched()
 			if b.IsFull() {
 				return false
 			}
-			runtime.Gosched()
 		} else {
 			pos = atomic.LoadInt64(&b.tail)
 		}
@@ -100,32 +114,22 @@ func (b *Bounded[T]) Enqueue(data *T) bool {
 	atomic.StorePointer(&cell.data, unsafe.Pointer(data))
 	atomic.StoreInt64(&cell.seq, pos+1)
 
-	//if b.wakeCh != nil && pos-b.head == 1 && b.wake == 0 {
-	//	if atomicx.Casint64(&b.wake, 0, 1) {
-	//		b.wakeCount.Incr()
-	//		select {
-	//		case b.wakeCh <- 1:
-	//		default:
-	//			b.wakeFull.Incr()
-	//		}
-	//	}
-	//}
+	if b.wakeCh != nil && pos-atomic.LoadInt64(&b.head) == 0 {
+		//if b.wakeCh != nil && atomic.LoadInt64(&b.wake) == 0 {
+		if atomicx.Casint64(&b.wake, 0, 1) {
+			b.wakeCount.Incr()
+			select {
+			case b.wakeCh <- 0:
+			default:
+				b.wakeFull.Incr()
+			}
+		}
+	}
 
 	return true
 }
 
-//func (b *Bounded[T]) EnqueueUnsafe(data unsafe.Pointer) bool {
-//	for !b.PushUnsafe0(data) {
-//		if b.IsFull() {
-//			return false
-//		} else {
-//			//println("not full!!!")
-//		}
-//	}
-//	return true
-//}
-
-func (b *Bounded[T]) EnqueueUnsafe(data unsafe.Pointer) bool {
+func (b *BoundedWake[T]) EnqueueUnsafe(data unsafe.Pointer) bool {
 	if data == nil {
 		return false
 	}
@@ -144,10 +148,10 @@ func (b *Bounded[T]) EnqueueUnsafe(data unsafe.Pointer) bool {
 			}
 			//pos = atomic.LoadInt64(&b.tail)
 		} else if diff < 0 {
+			runtime.Gosched()
 			if b.IsFull() {
 				return false
 			}
-			runtime.Gosched()
 		} else {
 			pos = atomic.LoadInt64(&b.tail)
 		}
@@ -156,21 +160,24 @@ func (b *Bounded[T]) EnqueueUnsafe(data unsafe.Pointer) bool {
 	atomic.StorePointer(&cell.data, data)
 	atomic.StoreInt64(&cell.seq, pos+1)
 
-	//if b.wakeCh != nil && pos-b.head == 1 && b.wake == 0 {
-	//	if atomicx.Casint64(&b.wake, 0, 1) {
-	//		b.wakeCount.Incr()
-	//		select {
-	//		case b.wakeCh <- 1:
-	//		default:
-	//			b.wakeFull.Incr()
-	//		}
-	//	}
-	//}
+	if b.wakeCh != nil && pos-atomic.LoadInt64(&b.head) == 0 {
+		//if b.wakeCh != nil && atomic.LoadInt64(&b.wake) == 0 {
+		if atomic.CompareAndSwapInt64(&b.wake, 0, 1) {
+			b.wakeCount.Incr()
+			select {
+			case b.wakeCh <- 0:
+			default:
+				b.wakeFull.Incr()
+			}
+		}
+	}
 
 	return true
 }
 
-func (b *Bounded[T]) Dequeue() *T {
+func (b *BoundedWake[T]) Dequeue() *T {
+	//b.wake = 0
+	atomic.StoreInt64(&b.wake, 0)
 	var (
 		cell *node[T]
 		pos  = atomic.LoadInt64(&b.head)
@@ -184,10 +191,10 @@ func (b *Bounded[T]) Dequeue() *T {
 				break
 			}
 		} else if diff < 0 {
+			runtime.Gosched()
 			if b.IsEmpty() {
 				return nil
 			}
-			runtime.Gosched()
 		} else {
 			pos = atomic.LoadInt64(&b.head)
 		}
@@ -203,7 +210,9 @@ func (b *Bounded[T]) Dequeue() *T {
 	return (*T)(data)
 }
 
-func (b *Bounded[T]) DequeueUnsafe() unsafe.Pointer {
+func (b *BoundedWake[T]) DequeueUnsafe() unsafe.Pointer {
+	//b.wake = 0
+	atomic.StoreInt64(&b.wake, 0)
 	var (
 		cell *node[T]
 		pos  = atomic.LoadInt64(&b.head)
@@ -217,10 +226,10 @@ func (b *Bounded[T]) DequeueUnsafe() unsafe.Pointer {
 				break
 			}
 		} else if diff < 0 {
+			runtime.Gosched()
 			if b.IsEmpty() {
 				return nil
 			}
-			runtime.Gosched()
 		} else {
 			pos = atomic.LoadInt64(&b.head)
 		}
@@ -235,7 +244,9 @@ func (b *Bounded[T]) DequeueUnsafe() unsafe.Pointer {
 	return data
 }
 
-func (b *Bounded[T]) DequeueDeref() (res T) {
+func (b *BoundedWake[T]) DequeueDeref() (res T) {
+	//b.wake = 0
+	atomic.StoreInt64(&b.wake, 0)
 	var (
 		cell *node[T]
 		pos  = atomic.LoadInt64(&b.head)
@@ -249,10 +260,10 @@ func (b *Bounded[T]) DequeueDeref() (res T) {
 				break
 			}
 		} else if diff < 0 {
+			runtime.Gosched()
 			if b.IsEmpty() {
 				return
 			}
-			runtime.Gosched()
 		} else {
 			pos = atomic.LoadInt64(&b.head)
 		}
@@ -267,8 +278,8 @@ func (b *Bounded[T]) DequeueDeref() (res T) {
 	return *(*T)(unsafe.Pointer(&data))
 }
 
-func (b *Bounded[T]) DequeueMany(maxCount int, consumer func(*T)) (count int) {
-	//atomic.StoreInt64(&b.wake, 0)
+func (b *BoundedWake[T]) DequeueMany(maxCount int, consumer func(*T)) (count int) {
+	atomic.StoreInt64(&b.wake, 0)
 	var (
 		cell *node[T]
 		pos  = atomic.LoadInt64(&b.head)
@@ -304,8 +315,8 @@ func (b *Bounded[T]) DequeueMany(maxCount int, consumer func(*T)) (count int) {
 	}
 }
 
-func (b *Bounded[T]) DequeueManyUnsafe(maxCount int, consumer func(pointer unsafe.Pointer)) (count int) {
-	//atomic.StoreInt64(&b.wake, 0)
+func (b *BoundedWake[T]) DequeueManyUnsafe(maxCount int, consumer func(pointer unsafe.Pointer)) (count int) {
+	atomic.StoreInt64(&b.wake, 0)
 	var (
 		cell *node[T]
 		pos  = atomic.LoadInt64(&b.head)
@@ -341,45 +352,47 @@ func (b *Bounded[T]) DequeueManyUnsafe(maxCount int, consumer func(pointer unsaf
 	}
 }
 
-func (b *Bounded[T]) DequeueManyDeref(maxCount int, consumer func(T)) (count int) {
-	//atomic.StoreInt64(&b.wake, 0)
+func (b *BoundedWake[T]) DequeueManyDeref(maxCount int, consumer func(T)) (count int) {
+	atomic.StoreInt64(&b.wake, 0)
 	var (
-		cell *node[T]
-		pos  = atomic.LoadInt64(&b.head)
+		cell   *node[T]
+		result unsafe.Pointer
+		pos    = atomic.LoadInt64(&b.head)
 	)
 	for {
 		cell = &b.nodes[pos&b.mask]
 		seq := atomic.LoadInt64(&cell.seq)
 		diff := seq - (pos + 1)
 		if diff == 0 {
-			if atomic.CompareAndSwapInt64(&b.head, pos, pos+1) {
-				data := atomic.SwapPointer(&cell.data, nil)
-				for data == nil {
-					runtime.Gosched()
-					data = atomic.SwapPointer(&cell.data, nil)
-				}
-
-				atomic.StoreInt64(&cell.seq, pos+b.mask+1)
-				consumer(*(*T)(unsafe.Pointer(&data)))
-				count++
-
-				if count >= maxCount {
-					return
-				}
-			}
-		} else if diff < 0 {
-			if b.IsEmpty() {
+			result = atomic.LoadPointer(&cell.data)
+			//result = atomic.SwapPointer(&cell.data, nil)
+			// Is the data there yet?
+			if result == nil {
+				atomic.StoreInt64(&b.head, pos)
 				return
 			}
-			runtime.Gosched()
+			atomic.StorePointer(&cell.data, nil)
+			atomic.StoreInt64(&cell.seq, b.head+b.mask+1)
+			consumer(*(*T)(unsafe.Pointer(&result)))
+			count++
+			pos++
+			b.head++
+
+			if count >= maxCount {
+				atomic.StoreInt64(&b.head, pos)
+				return
+			}
+		} else if diff < 0 {
+			atomic.StoreInt64(&b.head, pos)
+			return
 		} else {
 			pos = atomic.LoadInt64(&b.head)
 		}
 	}
 }
 
-func Reduce[T any, R any](
-	b *Bounded[T],
+func ReduceWake[T any, R any](
+	b *BoundedWake[T],
 	value R,
 	reducer func(*T, R) R,
 ) (int, R) {
@@ -406,11 +419,9 @@ func Reduce[T any, R any](
 	return count, value
 }
 
-func (b *Bounded[T]) Iterate(consumer func(*T) bool) (count int) {
+func (b *BoundedWake[T]) Iterate(consumer func(*T) bool) (count int) {
 	var (
 		next = atomic.LoadInt64(&b.head)
-		tail = atomic.LoadInt64(&b.tail)
-		size = tail - next
 		mask = b.mask
 	)
 	for i := 0; i < len(b.nodes); i++ {
@@ -423,20 +434,14 @@ func (b *Bounded[T]) Iterate(consumer func(*T) bool) (count int) {
 			}
 		}
 		next++
-		size--
-		if size <= 0 {
-			return
-		}
 	}
 	return
 }
 
-func (b *Bounded[T]) IterateDesc(consumer func(*T) bool) (count int) {
+func (b *BoundedWake[T]) IterateDesc(consumer func(*T) bool) (count int) {
 	var (
 		next = atomic.LoadInt64(&b.tail)
-		head = atomic.LoadInt64(&b.head)
 		mask = b.mask
-		size = next - head
 	)
 	for i := 0; i < len(b.nodes); i++ {
 		slot := &b.nodes[next&mask]
@@ -449,10 +454,6 @@ func (b *Bounded[T]) IterateDesc(consumer func(*T) bool) (count int) {
 		}
 		next--
 		if next < 0 {
-			return
-		}
-		size--
-		if size <= 0 {
 			return
 		}
 	}

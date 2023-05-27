@@ -6,6 +6,7 @@ require (
 	github.com/apache/arrow/go/v13 v13.0.0-20230509010303-b73ddc3336f9
 	github.com/bytedance/gopkg v0.0.0-20220817015305-b879a72dc90f
 	github.com/kavu/go_reuseport v1.5.0
+	github.com/minio/highwayhash v1.0.2
 	github.com/moontrade/log v0.0.0-20210429030621-11793f8b1da4
 	github.com/moontrade/unsafe v0.0.0-20220903011832-4a5d405fbbc0
 	github.com/panjf2000/ants v1.3.0

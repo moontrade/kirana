@@ -7,7 +7,7 @@ import (
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/gid"
 	"github.com/moontrade/kirana/pkg/hashmap"
-	"github.com/moontrade/kirana/pkg/mpsc"
+	"github.com/moontrade/kirana/pkg/mpmc"
 	"github.com/moontrade/kirana/pkg/pmath"
 	"github.com/moontrade/kirana/pkg/runtimex"
 	"github.com/moontrade/kirana/pkg/timex"
@@ -89,18 +89,20 @@ type Config struct {
 // without having to wait for a Tick.
 type Reactor struct {
 	Stats
-	id             int
-	now            int64
-	size           counter.Counter
-	currentTick    counter.Counter
+	id   int
+	now  int64
+	size counter.Counter
+	//currentTick    counter.Counter
 	idCounter      counter.Counter
 	state          int64
 	config         Config
-	wakeQ          *mpsc.Bounded[Task]
-	wakeListQ      *mpsc.Bounded[WakeList]
-	spawnQ         *mpsc.Bounded[Task]
-	invokeQ        *mpsc.Bounded[func()]
+	wakeQ          *mpmc.BoundedWake[Task]
+	wakeListQ      *mpmc.BoundedWake[WakeList]
+	spawnQ         *mpmc.BoundedWake[Task]
+	invokeQ        *mpmc.BoundedWake[func()]
 	timer          chan Tick
+	lastTick       int64
+	currentTick    int64
 	tickWheel      Wheel
 	level2Wheel    Wheel
 	level3Wheel    Wheel
@@ -163,10 +165,10 @@ func NewReactor(config Config) (*Reactor, error) {
 		ticksPerLevel3: int64(config.Level3Wheel.tickDur / config.Level1Wheel.tickDur),
 		wakeCh:         wakeCh,
 		tasks:          hashmap.NewSync[int64, *Task](8, 1024, hashmap.HashInt64),
-		wakeQ:          mpsc.NewBounded[Task](int64(config.WakeQSize), wakeCh),
-		wakeListQ:      mpsc.NewBounded[WakeList](int64(config.WakeQSize), wakeCh),
-		spawnQ:         mpsc.NewBounded[Task](int64(config.SpawnQSize), wakeCh),
-		invokeQ:        mpsc.NewBounded[func()](int64(config.InvokeQSize), wakeCh),
+		wakeQ:          mpmc.NewBoundedWake[Task](int64(config.WakeQSize), wakeCh),
+		wakeListQ:      mpmc.NewBoundedWake[WakeList](int64(config.WakeQSize), wakeCh),
+		spawnQ:         mpmc.NewBoundedWake[Task](int64(config.SpawnQSize), wakeCh),
+		invokeQ:        mpmc.NewBoundedWake[func()](int64(config.InvokeQSize), wakeCh),
 		timer:          make(chan Tick, 1),
 		ctx:            ctx,
 		cancel:         cancel,
@@ -216,7 +218,7 @@ func (r *Reactor) Wake(task *Task) error {
 	if reactor != r {
 		return reactor.Wake(task)
 	}
-	r.wakeQ.Push(task)
+	r.wakeQ.Enqueue(task)
 	return nil
 }
 
@@ -235,7 +237,7 @@ func (r *Reactor) WakeAfter(task *Task, after time.Duration) error {
 	if reactor != r {
 		return reactor.Wake(task)
 	}
-	if !r.wakeQ.Push(task) {
+	if !r.wakeQ.Enqueue(task) {
 		return ErrQueueFull
 	} else {
 		return nil
@@ -252,7 +254,7 @@ func (r *Reactor) wakeList(list *WakeList) error {
 	if list.reactor != r {
 		return list.reactor.wakeList(list)
 	}
-	if !r.wakeListQ.Push(list) {
+	if !r.wakeListQ.Enqueue(list) {
 		return ErrQueueFull
 	} else {
 		return nil
@@ -263,14 +265,14 @@ func (r *Reactor) Invoke(fn func()) bool {
 	if fn == nil {
 		return false
 	}
-	return r.invokeQ.PushUnsafe(runtimex.FuncToPointer(fn))
+	return r.invokeQ.EnqueueUnsafe(runtimex.FuncToPointer(fn))
 }
 
 func (r *Reactor) InvokeRef(fn *func()) bool {
 	if fn == nil {
 		return false
 	}
-	return r.invokeQ.PushUnsafe(runtimex.FuncToPointer(*fn))
+	return r.invokeQ.EnqueueUnsafe(runtimex.FuncToPointer(*fn))
 }
 
 func (r *Reactor) InvokeBlocking(fn func()) bool {
@@ -289,7 +291,7 @@ func (r *Reactor) Spawn(future Future) (*Task, error) {
 	if provider, ok := future.(FutureTask); ok {
 		provider.SetTask(task)
 	}
-	if !r.spawnQ.Push(task) {
+	if !r.spawnQ.Enqueue(task) {
 		return nil, ErrQueueFull
 	}
 	return task, nil
@@ -308,7 +310,7 @@ func (r *Reactor) SpawnInterval(future Future, interval time.Duration) (*Task, e
 	if provider, ok := future.(FutureTask); ok {
 		provider.SetTask(task)
 	}
-	if !r.spawnQ.Push(task) {
+	if !r.spawnQ.Enqueue(task) {
 		return nil, ErrQueueFull
 	}
 	return task, nil
@@ -330,15 +332,7 @@ func (r *Reactor) run() {
 		defer runtime.UnlockOSThread()
 	}
 
-	r.pid = gid.PID()
-	r.gid = gid.GID()
-	var (
-		invokeQ   = r.invokeQ
-		wakeQ     = r.wakeQ
-		wakeListQ = r.wakeListQ
-		spawnQ    = r.spawnQ
-	)
-
+	r.gid, r.pid = gid.GIDPID()
 	tick, err := initTicker(r.tickDur).Register(r.tickDur, r, r.wakeCh)
 	if err != nil {
 		panic(err)
@@ -346,110 +340,110 @@ func (r *Reactor) run() {
 	defer func() {
 		_ = tick.Close()
 	}()
-
-	onSpawn := func(task *Task) {
-		r.pollStart(r.now, task)
-	}
-
-	onWake := func(task *Task) {
-		r.pollWake(r.now, task)
-	}
-
-	onWakeList := func(list *WakeList) {
-		r.pollWakeList(r.now, list)
-	}
-
-	onFn := func(task func()) {
-		r.invoke(task)
-	}
-
-	flushQueues := func() int {
-		total := 0
-		if !wakeListQ.IsEmpty() {
-			count := wakeListQ.PopMany(math.MaxUint32, onWakeList)
-			total += count
-			r.wakeLists.Add(int64(count))
-		}
-		if !invokeQ.IsEmpty() {
-			count := invokeQ.PopManyDeref(math.MaxUint32, onFn)
-			total += count
-			r.invokes.Add(int64(count))
-		}
-		if !wakeQ.IsEmpty() {
-			count := wakeQ.PopMany(math.MaxUint32, onWake)
-			total += count
-			r.wakes.Add(int64(count))
-		}
-		if !spawnQ.IsEmpty() {
-			count := spawnQ.PopMany(math.MaxUint32, onSpawn)
-			total += count
-			r.spawns.Add(int64(count))
-		}
-		return total
-	}
-
-	processTick := func(tick int64) {
-		interval := int64(r.tickDur)
-		start := timex.NanoTime()
-		begin := start
-		r.tick(tick, begin)
-		end := timex.NanoTime()
-		elapsed := end - begin
-
-		// Stats
-		r.ticks.Incr()
-		r.ticksDur.Add(elapsed)
-		if r.ticksDurMin == 0 || r.ticksDurMin.Load() > elapsed {
-			r.ticksDurMin.Store(elapsed)
-		}
-		if r.ticksDurMax.Load() < elapsed {
-			r.ticksDurMax.Store(elapsed)
-		}
-
-		begin = end
-		flushQueues()
-		end = timex.NanoTime()
-		r.flushesDur.Add(end - begin)
-		elapsed = end - start
-		r.flushes.Add(1)
-
-		if elapsed > interval {
-			r.skew.Incr()
-			r.skewDur.Add(elapsed)
-			r.rebalance()
-		}
-	}
-
-	var (
-		//backoffCount = 0
-		//microTimer   = time.NewTimer(time.Microsecond * 50)
-		//_           = backoffCount
-		//_           = microTimer
-		wakeCh      = r.wakeCh
-		lastTick    = int64(0)
-		currentTick = int64(0)
-	)
 	for {
 		select {
-		case v := <-wakeCh:
-			if v > 0 && v != lastTick {
-				currentTick = v
-				if lastTick < v-1 {
-					r.catchup(lastTick, currentTick)
-				}
-				lastTick = currentTick
-				processTick(currentTick)
-				continue
-			}
-			r.now = timex.NanoTime()
-			flushQueues()
+		case v := <-r.wakeCh:
+			r.onWakeMessage(v)
 		}
 	}
 }
 
+func (r *Reactor) onWakeMessage(v int64) {
+	r.maybeProcessTick(v)
+	r.now = timex.NanoTime()
+	for r.flushQueues() > 0 {
+		r.now = timex.NanoTime()
+	}
+}
+
+func (r *Reactor) maybeProcessTick(v int64) {
+	if v < 1 || v == r.lastTick {
+		return
+	}
+	r.currentTick = v
+	if r.lastTick < v-1 {
+		r.catchup(r.lastTick, r.currentTick)
+	}
+	r.lastTick = r.currentTick
+	r.processTick(r.currentTick)
+}
+
+func (r *Reactor) processTick(tick int64) {
+	interval := int64(r.tickDur)
+	start := timex.NanoTime()
+	begin := start
+	r.tick(tick, begin)
+	end := timex.NanoTime()
+	elapsed := end - begin
+
+	// Stats
+	r.ticks.Incr()
+	r.ticksDur.Add(elapsed)
+	if r.ticksDurMin == 0 || r.ticksDurMin.Load() > elapsed {
+		r.ticksDurMin.Store(elapsed)
+	}
+	if r.ticksDurMax.Load() < elapsed {
+		r.ticksDurMax.Store(elapsed)
+	}
+
+	begin = end
+	r.flushQueues()
+	end = timex.NanoTime()
+	r.flushesDur.Add(end - begin)
+	elapsed = end - start
+	r.flushes.Add(1)
+
+	if elapsed > interval {
+		r.skew.Incr()
+		r.skewDur.Add(elapsed)
+		r.rebalance()
+	}
+}
+
+func (r *Reactor) onSpawn(task *Task) {
+	r.pollStart(r.now, task)
+}
+
+func (r *Reactor) onWake(task *Task) {
+	r.pollWake(r.now, task)
+}
+
+func (r *Reactor) onWakeList(list *WakeList) {
+	r.pollWakeList(r.now, list)
+}
+
+func (r *Reactor) onFn(task func()) {
+	r.invoke(task)
+}
+
+func (r *Reactor) flushQueues() int {
+	total := 0
+	if !r.wakeListQ.IsEmpty() {
+		count := r.wakeListQ.DequeueMany(math.MaxUint32, r.onWakeList)
+		total += count
+		r.wakeLists.Add(int64(count))
+	}
+	if !r.invokeQ.IsEmpty() {
+		count := r.invokeQ.DequeueManyDeref(math.MaxUint32, r.onFn)
+		total += count
+		r.invokes.Add(int64(count))
+	}
+	if !r.wakeQ.IsEmpty() {
+		count := r.wakeQ.DequeueMany(math.MaxUint32, r.onWake)
+		total += count
+		r.wakes.Add(int64(count))
+	}
+	if !r.spawnQ.IsEmpty() {
+		count := r.spawnQ.DequeueMany(math.MaxUint32, r.onSpawn)
+		total += count
+		r.spawns.Add(int64(count))
+	}
+	return total
+}
+
 func (r *Reactor) catchup(lastTick, currentTick int64) {
 	logger.Warn("skew detected of %d ticks", currentTick-1-lastTick)
-	logger.Warn("catching up...")
+	//logger.Warn("catching up...")
 
 	now := timex.NanoTime()
 	for nextTick := lastTick + 1; nextTick <= currentTick; nextTick++ {
@@ -711,14 +705,14 @@ func (r *Reactor) pollInterval(now int64, list *taskSwapList, task *Task) bool {
 }
 
 func (r *Reactor) Print() {
-	avg := time.Duration(r.ticksDur.Load()) / time.Duration(r.currentTick.Load())
+	avg := time.Duration(r.ticksDur.Load()) / time.Duration(r.currentTick)
 	fmt.Println("Size			", r.size.Load())
 	fmt.Println("PID				", r.pid)
 	fmt.Println("PID Switches	", r.pidSwitches.Load())
 	//fmt.Println("Capacity		", r.cap)
-	fmt.Println("Ticks			", r.currentTick.Load())
+	fmt.Println("Ticks			", r.currentTick)
 	//fmt.Println("Ticks Dur 		", Time.Duration(r.ticksDur.Load()))
-	fmt.Println("Tick Avg Dur 	", time.Duration(r.ticksDur.Load())/time.Duration(r.currentTick.Load()))
+	fmt.Println("Tick Avg Dur 	", time.Duration(r.ticksDur.Load())/time.Duration(r.currentTick))
 	//fmt.Println("Skew			", r.skew.Load())
 	//fmt.Println("Skew Dur		", Time.Duration(r.skewDur.Load()))
 	//fmt.Println("Dropped Dur	", r.droppedDur.Load())

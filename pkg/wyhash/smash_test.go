@@ -42,7 +42,7 @@ func TestSmhasherSanity(t *testing.T) {
 }
 
 func bytesHash(b []byte) uint64 {
-	return Hash(*(*unsafe.Pointer)(unsafe.Pointer(&b)), uint64(len(b)), DefaultSeed)
+	return Hash(*(*unsafe.Pointer)(unsafe.Pointer(&b)), uint64(len(b)))
 }
 func stringHash(s string) uint64 {
 	return String(s)
@@ -76,7 +76,7 @@ func (s *hashSet) addB(x []byte) {
 }
 
 func (s *hashSet) addS_seed(x string, seed seed) {
-	s.add(Hash(*(*unsafe.Pointer)(unsafe.Pointer(&x)), uint64(len(x)), seed.s))
+	s.add(HashWithSeed(*(*unsafe.Pointer)(unsafe.Pointer(&x)), uint64(len(x)), seed.s))
 }
 
 func (s *hashSet) check(t *testing.T) {

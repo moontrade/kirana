@@ -6,6 +6,7 @@ import (
 	"github.com/moontrade/kirana/pkg/runtimex"
 	"github.com/moontrade/kirana/pkg/timex"
 	logger "github.com/moontrade/log"
+	"github.com/panjf2000/ants"
 	"reflect"
 	"runtime"
 	"sync"
@@ -115,52 +116,104 @@ func TestBlockingConcurrent(t *testing.T) {
 func BenchmarkBlockingPool(b *testing.B) {
 	//Init(1, Millis500, 1000000, 100000)
 	//bp := blocking
-	bp := NewBlockingPool(0, b.N*2)
 
-	c := new(counter.Counter)
-	fn := func() {
-		c.Incr()
-	}
-	for i := 0; i < b.N; i++ {
-		bp.Invoke(fn)
-	}
+	const parallelism = 64
 
-	for c.Load() < int64(b.N-1) {
-		runtime.Gosched()
-		//fmt.Println(c.Load(), b.N-1)
-	}
+	b.Run("Kirana", func(b *testing.B) {
+		bp := NewBlockingPool(4, 1024*1024)
 
-	c.Store(0)
-	b.SetParallelism(2)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	//b.RunParallel(func(pb *testing.PB) {
-	//	for pb.Next() {
-	//		if !bp.Invoke(fn) {
-	//			c.Incr()
-	//		}
-	//	}
-	//
-	//})
-
-	for i := 0; i < b.N; i++ {
-		if !bp.Invoke(fn) {
+		c := new(counter.Counter)
+		errs := new(counter.Counter)
+		fn := func() {
 			c.Incr()
-			panic("could not invoke")
-			//runtime.Gosched()
-			//for !bp.Invoke(fn) {
-			//	runtime.Gosched()
-			//}
 		}
-	}
+		for i := 0; i < b.N; i++ {
+			bp.Invoke(fn)
+		}
 
-	for c.Load() < int64(b.N-1) {
-		runtime.Gosched()
-		//fmt.Println(c.Load(), b.N-1)
-	}
+		for c.Load() < int64(b.N-1) {
+			runtime.Gosched()
+			//fmt.Println(c.Load(), b.N-1)
+		}
 
-	b.StopTimer()
+		c.Store(0)
+		b.SetParallelism(parallelism)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				if !bp.Invoke(fn) {
+					c.Incr()
+					errs.Incr()
+				}
+			}
+		})
+
+		//for i := 0; i < b.N; i++ {
+		//	if !bp.Invoke(fn) {
+		//		c.Incr()
+		//		panic("could not invoke")
+		//		//runtime.Gosched()
+		//		//for !bp.Invoke(fn) {
+		//		//	runtime.Gosched()
+		//		//}
+		//	}
+		//}
+
+		for c.Load() < int64(b.N-1) {
+			runtime.Gosched()
+			//fmt.Println(c.Load(), b.N-1)
+		}
+
+		b.StopTimer()
+
+		fmt.Println("Kirana Errors", errs.Load())
+	})
+
+	b.Run("ants", func(b *testing.B) {
+		c := new(counter.Counter)
+		errs := new(counter.Counter)
+		fn := func() {
+			c.Incr()
+		}
+
+		c.Store(0)
+		b.SetParallelism(parallelism)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				if ants.Submit(fn) != nil {
+					c.Incr()
+					errs.Incr()
+				}
+			}
+		})
+
+		//for i := 0; i < b.N; i++ {
+		//	if !bp.Invoke(fn) {
+		//		c.Incr()
+		//		panic("could not invoke")
+		//		//runtime.Gosched()
+		//		//for !bp.Invoke(fn) {
+		//		//	runtime.Gosched()
+		//		//}
+		//	}
+		//}
+
+		for c.Load() < int64(b.N-1) {
+			runtime.Gosched()
+			//fmt.Println(c.Load(), b.N-1)
+		}
+
+		b.StopTimer()
+
+		fmt.Println("Ants Errors", errs.Load())
+	})
+
 	//fmt.Println("workers", len(bp.workers), " wakes", bp.workers[0].WakeCount(), " wake chan full count", bp.queue.WakeChanFullCount())
 }

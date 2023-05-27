@@ -2,8 +2,6 @@ package pool
 
 import (
 	"errors"
-	"fmt"
-	"github.com/moontrade/kirana/pkg/atomicx"
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/gid"
 	"github.com/moontrade/kirana/pkg/mpmc"
@@ -11,18 +9,13 @@ import (
 	"github.com/moontrade/kirana/pkg/spinlock"
 	"math"
 	"runtime"
+	"sync"
 	"unsafe"
 )
 
 var (
 	ErrNeedAllocFunc = errors.New("need alloc func")
 )
-
-type ShardFunc func() int
-
-func ShardByProcessor() int { return int(gid.PID()) }
-
-func ShardByGoroutineID() int { return int(gid.GID()) }
 
 type AllocFunc[T any] func() unsafe.Pointer
 
@@ -35,7 +28,6 @@ type DeInitFunc[T any] func(pointer unsafe.Pointer)
 type Config[T any] struct {
 	SizeClass, NumShards    int
 	PageSize, PagesPerShard int64
-	ShardFunc
 	AllocFunc[T]
 	DeallocFunc[T]
 	InitFunc[T]
@@ -61,9 +53,6 @@ func (c *Config[T]) Validate() {
 	} else {
 		c.PagesPerShard = int64(pmath.CeilToPowerOf2(int(c.PagesPerShard)))
 	}
-	if c.ShardFunc == nil {
-		c.ShardFunc = ShardByProcessor
-	}
 }
 
 func (c *Config[T]) defaults() {
@@ -80,13 +69,11 @@ func (c *Config[T]) defaults() {
 	} else {
 		c.PagesPerShard = int64(pmath.CeilToPowerOf2(int(c.PagesPerShard)))
 	}
-	if c.ShardFunc == nil {
-		c.ShardFunc = ShardByProcessor
-	}
 }
 
 type Stats struct {
 	Allocs            counter.Counter
+	Allocs2           counter.Counter
 	Deallocs          counter.Counter
 	PageAllocs        counter.Counter
 	PageAllocAttempts counter.Counter
@@ -116,11 +103,9 @@ func NewPool[T any](
 		pool.shards[i] = Shard[T]{
 			pool:   pool,
 			config: config,
-			full:   mpmc.NewBounded[mpmc.Bounded[T]](config.PagesPerShard),
-			free:   mpmc.NewBounded[mpmc.Bounded[T]](config.PagesPerShard),
+			//queue:  NewCircleBuf(int(config.PageSize)),
+			queue: mpmc.NewBounded[T](config.PageSize),
 		}
-		pool.shards[i].pop.Store(mpmc.NewBounded[T](config.PageSize))
-		pool.shards[i].push.Store(mpmc.NewBounded[T](config.PageSize))
 	}
 	pool.lastMiss = &pool.shards[0]
 	return pool
@@ -130,8 +115,15 @@ func (p *Pool[T]) Shards() []Shard[T] {
 	return p.shards
 }
 
+func (p *Pool[T]) Len() int {
+	r := 0
+	for i := 0; i < len(p.shards); i++ {
+		r += p.shards[i].Len()
+	}
+	return r
+}
+
 func (p *Pool[T]) Shard() *Shard[T] {
-	//pid := runtimex.Pid()
 	pid := int(gid.PID())
 	if len(p.shards) <= pid {
 		return &p.shards[pid]
@@ -145,57 +137,37 @@ func (p *Pool[T]) Get() *T {
 }
 
 func (p *Pool[T]) GetUnsafe() unsafe.Pointer {
-	//pid := runtimex.Pid()
 	pid := int(gid.PID())
 	if pid < len(p.shards) {
-		shard := &p.shards[pid]
-		v := shard.GetUnsafe()
+		v := p.shards[pid].GetUnsafe()
 		return v
 	} else {
-		shard := &p.shards[pid&p.mask]
-		//shard := &p.shards[pid%len(p.shards)]
-		v := shard.GetUnsafe()
+		v := p.shards[pid&p.mask].GetUnsafe()
 		return v
 	}
 }
 
 func (p *Pool[T]) Put(data *T) {
-	//p.lastMiss.PutUnsafe0(unsafe.Pointer(data))
-	//p.Shard().PutUnsafe(unsafe.Pointer(data))
-	if p.lastMiss.TryPutUnsafe(unsafe.Pointer(data)) {
-		return
-	}
-	//pid := runtimex.Pid()
 	pid := int(gid.PID())
-	if len(p.shards) <= pid {
-		shard := &p.shards[pid]
-		shard.PutUnsafe(unsafe.Pointer(data))
+	if len(p.shards) > pid {
+		p.shards[pid].PutUnsafe(unsafe.Pointer(data))
 	} else {
-		//shard := &p.shards[pid%len(p.shards)]
-		shard := &p.shards[pid&p.mask]
-		shard.PutUnsafe(unsafe.Pointer(data))
+		p.shards[pid&p.mask].PutUnsafe(unsafe.Pointer(data))
 	}
 }
 
 func (p *Pool[T]) PutUnsafe(data unsafe.Pointer) {
-	if p.lastMiss.TryPutUnsafe(data) {
-		return
-	}
-
-	//pid := runtimex.Pid()
 	pid := int(gid.PID())
-	if len(p.shards) <= pid {
-		shard := &p.shards[pid]
-		shard.PutUnsafe(data)
+	if len(p.shards) > pid {
+		p.shards[pid].PutUnsafe(data)
 	} else {
-		shard := &p.shards[pid&p.mask]
-		//shard := &p.shards[pid%len(p.shards)]
-		shard.PutUnsafe(data)
+		p.shards[pid&p.mask].PutUnsafe(data)
 	}
 }
 
 type ShardStats struct {
 	Allocates   counter.Counter
+	Allocates2  counter.Counter
 	Deallocates counter.Counter
 }
 
@@ -204,11 +176,10 @@ type Shard[T any] struct {
 	pool   *Pool[T]
 	pid    int
 	config Config[T]
-	pop    atomicx.Pointer[mpmc.Bounded[T]]
-	push   atomicx.Pointer[mpmc.Bounded[T]]
-	full   *mpmc.Bounded[mpmc.Bounded[T]]
-	free   *mpmc.Bounded[mpmc.Bounded[T]]
-	mu     spinlock.Mutex
+	//queue  *CircleBuf
+	queue *mpmc.Bounded[T]
+	mu    spinlock.Mutex
+	_mu   sync.Mutex
 }
 
 func (s *Shard[T]) Pool() *Pool[T] { return s.pool }
@@ -216,22 +187,20 @@ func (s *Shard[T]) Pool() *Pool[T] { return s.pool }
 func (s *Shard[T]) SizeClass() int { return s.config.SizeClass }
 
 func (s *Shard[T]) Len() int {
-	var (
-		pop    = s.pop.Load()
-		push   = s.push.Load()
-		length = pop.Len()
-	)
-	if pop != push {
-		length += push.Len()
-	}
-	if s.full.Len() > 0 {
-		_, length = mpmc.Reduce[mpmc.Bounded[T], int](s.full, length, sumLength[T])
-	}
-	return length
+	return s.queue.Len()
 }
 
-func (s *Shard[T]) FreePages() int {
-	return s.free.Len()
+func (s *Shard[T]) fill(pct float64) {
+	if pct <= 0 {
+		return
+	}
+	capacity := s.queue.Cap()
+	if pct < 1.0 {
+		capacity = int(float64(capacity) * pct)
+	}
+	for i := 0; i < capacity; i++ {
+		s.putUnsafe(s.getUnsafe())
+	}
 }
 
 func sumLength[T any](item *mpmc.Bounded[T], sum int) int {
@@ -241,6 +210,7 @@ func sumLength[T any](item *mpmc.Bounded[T], sum int) int {
 func (s *Shard[T]) allocate() unsafe.Pointer {
 	//s.Allocates.Incr()
 	s.pool.Allocs.Incr()
+	s.Allocates.Incr()
 	s.pool.lastMiss = s
 	value := s.config.AllocFunc()
 	if value == nil {
@@ -254,7 +224,7 @@ func (s *Shard[T]) allocate() unsafe.Pointer {
 
 func (s *Shard[T]) deallocate(item unsafe.Pointer) {
 	s.pool.Deallocs.Incr()
-	//s.Deallocates.Incr()
+	s.Deallocates.Incr()
 	if s.config.DeallocFunc != nil {
 		s.config.DeallocFunc(item)
 	}
@@ -262,26 +232,21 @@ func (s *Shard[T]) deallocate(item unsafe.Pointer) {
 
 func (s *Shard[T]) deallocatePage(page *mpmc.Bounded[T]) {
 	s.pool.PageDeallocs.Incr()
-	page.PopManyUnsafe(math.MaxInt, s.deallocate)
-}
-
-func (s *Shard[T]) GetUnsafe0() unsafe.Pointer {
-	result := s.pop.Get().PopUnsafe()
-	if result != nil {
-		return result
-	}
-	return s.allocate()
+	page.DequeueManyUnsafe(math.MaxInt, s.deallocate)
 }
 
 func (s *Shard[T]) GetUnsafe() unsafe.Pointer {
 	v := s.getUnsafe()
 	return v
+	//return nil
 }
 
 func (s *Shard[T]) getUnsafe() unsafe.Pointer {
-	pop := s.pop.Get()
-	v := pop.PopUnsafe()
-	// Empty?
+	//s.mu.Lock()
+	//defer s.mu.Unlock()
+
+	v := s.queue.DequeueUnsafe()
+	// Hit?
 	if v != nil {
 		if s.config.InitFunc != nil {
 			s.config.InitFunc(v)
@@ -289,61 +254,32 @@ func (s *Shard[T]) getUnsafe() unsafe.Pointer {
 		return v
 	}
 
-	//pop = s.pop.Load()
-	push := s.push.Load()
-	v = push.PopUnsafe()
-	if v != nil {
-		if s.config.InitFunc != nil {
-			s.config.InitFunc(v)
-		}
-		return v
-	}
-	//if pop == push {
-	//	return s.allocate()
-	//}
-
-	// Try to get the next full list
-	next := s.full.Pop()
-
-	// Is the full list empty?
-	if next == nil {
-		// Somehow emptied before we could pop 1 out. Unlikely to impossible!
-		return s.allocate()
-	}
-
-	if !s.pop.CAS(pop, next) {
-		// Push back into full
-		if !s.full.Push(next) {
-			s.deallocatePage(next)
-		}
-		pop = s.pop.Load()
-		v = pop.PopUnsafe()
-		if v == nil {
-			v = s.allocate()
-		}
-		return v
-	}
-
-	// Push into free list
-	s.free.Push(pop)
-
-	v = next.PopUnsafe()
-	if v == nil {
-		v = s.allocate()
-	}
+	v = s.allocate()
 	return v
 }
 
-func (s *Shard[T]) PutUnsafe0(data unsafe.Pointer) {
-	s.pop.Get().PushUnsafe(data)
-}
-
 func (s *Shard[T]) TryPutUnsafe(data unsafe.Pointer) bool {
-	return s.pop.Get().PushUnsafe(data)
+	if data == nil {
+		return false
+	}
+
+	if s.config.DeInitFunc != nil {
+		s.config.DeInitFunc(data)
+	}
+
+	//s.mu.Lock()
+	//defer s.mu.Unlock()
+
+	if s.queue.EnqueueUnsafe(data) {
+		return true
+	}
+
+	s.deallocate(data)
+
+	return false
 }
 
 func (s *Shard[T]) PutUnsafe(data unsafe.Pointer) {
-	//_ = runtimex.Pin()
 	s.putUnsafe(data)
 }
 
@@ -351,104 +287,81 @@ func (s *Shard[T]) putUnsafe(data unsafe.Pointer) {
 	if data == nil {
 		return
 	}
+
 	if s.config.DeInitFunc != nil {
 		s.config.DeInitFunc(data)
 	}
-	push := s.push.Load()
-	if push.PushUnsafe(data) {
+
+	//s.mu.Lock()
+	//defer s.mu.Unlock()
+
+	if s.queue.EnqueueUnsafe(data) {
 		return
 	}
 
-	// Get pop
-	pop := s.pop.Load()
-	if pop.PushUnsafe(data) {
-		return
+	s.deallocate(data)
+}
+
+type CircleBuf struct {
+	nodes []unsafe.Pointer
+	mask  int64
+	head  int64
+	tail  int64
+}
+
+func NewCircleBuf(capacity int) *CircleBuf {
+	if capacity < 4 {
+		capacity = 4
 	}
-	// Are push and pop the same?
-	//if push == pop {
-	//	goto NextFree
-	//}
-
-	//// Try setting pop to the now full push
-	//if s.pop.CAS(pop, push) {
-	//	// Race?
-	//	if !s.push.CAS(push, pop) {
-	//		// Atomically load and try to push
-	//		push = s.push.Load()
-	//		if !push.PushUnsafe(data) {
-	//			goto NextFree
-	//		}
-	//	} else {
-	//		// Push into the new ring which is now the active push
-	//		if !pop.PushUnsafe(data) {
-	//			goto NextFree
-	//		}
-	//	}
-	//	return
-	//} else {
-	//	// Atomically load and try to push
-	//	push = s.push.Load()
-	//	if !push.PushUnsafe(data) {
-	//		goto NextFree
-	//	}
-	//	return
-	//}
-
-NextFree:
-	// Get the next free
-	next := s.free.Pop()
-
-	// Anything in the free list?
-	if next == nil {
-		s.pool.PageAllocAttempts.Incr()
-		// Allocate new page
-		next = mpmc.NewBounded[T](s.config.PageSize)
-		// Race?
-		if !s.push.CAS(push, next) {
-			push = s.push.Load()
-			// Atomically load and try to push
-			if !s.push.Load().PushUnsafe(data) {
-				goto NextFree
-				//s.deallocate(data)
-			}
-		} else {
-			s.pool.PageAllocs.Incr()
-			// Push into the new ring which is now the active push
-			if !next.PushUnsafe(data) {
-				s.deallocate(data)
-			}
-			// Add push to full list
-			if !s.full.Push(push) {
-				s.deallocatePage(push)
-			}
-		}
-	} else {
-		if !next.IsEmpty() {
-			if !s.full.Push(next) {
-				s.deallocatePage(next)
-			}
-			fmt.Println("free list had non empty with size", next.Len())
-			goto NextFree
-		}
-		// Atomically set to the new push
-		if !s.push.CAS(push, next) {
-			push = s.push.Load()
-			// Put back into free list if the CAS failed
-			s.free.Push(next)
-			// Atomically load and try to push
-			if !s.push.Load().PushUnsafe(data) {
-				goto NextFree
-				//s.deallocate(data)
-			}
-		} else {
-			// Push into the new active push
-			if !next.PushUnsafe(data) {
-				s.deallocate(data)
-			}
-			// Add push to full list
-			if !s.full.Push(push) {
-				s.deallocatePage(push)
-			}
-		}
+	capacity = int(pmath.CeilToPowerOf2(int(capacity)))
+	return &CircleBuf{
+		nodes: make([]unsafe.Pointer, capacity),
+		mask:  int64(capacity - 1),
+		head:  0,
+		tail:  0,
 	}
+}
+
+func (c *CircleBuf) Enqueue(v unsafe.Pointer) bool {
+	if c.tail-c.head >= c.mask {
+		return false
+	}
+	c.nodes[c.tail&c.mask] = v
+	c.tail++
+	return true
+}
+
+func (c *CircleBuf) EnqueueUnsafe(v unsafe.Pointer) bool {
+	if c.tail-c.head >= c.mask {
+		return false
+	}
+	c.nodes[c.tail&c.mask] = v
+	c.tail++
+	return true
+}
+
+func (c *CircleBuf) Dequeue() unsafe.Pointer {
+	if c.tail-c.head == 0 {
+		return nil
+	}
+	r := c.nodes[c.head&c.mask]
+	c.head++
+	return r
+}
+
+func (c *CircleBuf) DequeueUnsafe() unsafe.Pointer {
+	if c.tail-c.head == 0 {
+		return nil
+	}
+	r := c.nodes[c.head&c.mask]
+	c.head++
+	return r
+}
+
+func (c *CircleBuf) Len() int64 {
+	return c.tail - c.head
+}
+
+func (c *CircleBuf) Cap() int {
+	return len(c.nodes)
 }

@@ -2,12 +2,12 @@ package cow
 
 import (
 	"github.com/moontrade/kirana/pkg/pmath"
-	"sync"
+	"github.com/moontrade/kirana/pkg/spinlock"
 )
 
 type Map[K comparable, V any] struct {
 	data map[K]V
-	mu   sync.Mutex
+	mu   spinlock.Mutex
 }
 
 func NewMap[K comparable, V any](initialSize int) *Map[K, V] {

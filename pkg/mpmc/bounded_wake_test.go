@@ -1,18 +1,15 @@
-package mpsc
+package mpmc
 
 import (
+	"fmt"
 	"github.com/moontrade/kirana/pkg/counter"
 	"testing"
 )
 
-type Task struct {
-	c *counter.Counter
-}
-
-func BenchmarkMPSC(b *testing.B) {
+func BenchmarkMPMCWake(b *testing.B) {
 	//rb := New[Task](1024, nil)
 	//rb := NewTask(1024, nil)
-	rb := NewBounded[Task](1024, nil)
+	rb := NewBoundedWake[Task](1024, nil)
 	//rb := New[*Task](1024, nil)
 
 	c := counter.Counter(0)
@@ -26,13 +23,13 @@ func BenchmarkMPSC(b *testing.B) {
 	//		fmt.Println(c.Load())
 	//	}
 	//}()
-	rb.Push(task)
+	rb.Enqueue(task)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		rb.Push(task)
-		rb.Pop()
+		rb.Enqueue(task)
+		rb.Dequeue()
 		//<-rb.wakeCh
 		//if t != task {
 		//	b.Fatal("bad")
@@ -41,7 +38,7 @@ func BenchmarkMPSC(b *testing.B) {
 		//if ok {
 		//
 		//}
-		//rb.PopMany(func(v int) {})
+		//rb.DequeueMany(func(v int) {})
 	}
 	b.StopTimer()
 	//fmt.Println("Wake Count", rb.wakeCount.Load())
@@ -49,10 +46,10 @@ func BenchmarkMPSC(b *testing.B) {
 	//fmt.Println(rb.wakeCount.Load())
 }
 
-func TestMPSC(t *testing.T) {
+func TestMPMCWake(t *testing.T) {
 	//rb := New[Task](1024, nil)
 	//rb := NewTask(1024, nil)
-	rb := NewBounded[Task](32, nil)
+	rb := NewBoundedWake[Task](32, nil)
 	//rb := New[*Task](1024, nil)
 
 	c := counter.Counter(0)
@@ -66,11 +63,11 @@ func TestMPSC(t *testing.T) {
 	//		fmt.Println(c.Load())
 	//	}
 	//}()
-	rb.Push(task)
+	rb.Enqueue(task)
 
 	for i := 0; i < 64; i++ {
-		rb.Push(task)
-		rb.Pop()
+		rb.Enqueue(task)
+		rb.Dequeue()
 		//<-rb.wakeCh
 		//if t != task {
 		//	b.Fatal("bad")
@@ -79,10 +76,10 @@ func TestMPSC(t *testing.T) {
 		//if ok {
 		//
 		//}
-		//rb.PopMany(func(v int) {})
+		//rb.DequeueMany(func(v int) {})
 	}
 
-	//fmt.Println("Wake Count", rb.wakeCount.Load())
-	//fmt.Println("Wake Full Count", rb.wakeFull.Load())
-	//fmt.Println(rb.wakeCount.Load())
+	fmt.Println("Wake Count", rb.wakeCount.Load())
+	fmt.Println("Wake Full Count", rb.wakeFull.Load())
+	fmt.Println(rb.wakeCount.Load())
 }

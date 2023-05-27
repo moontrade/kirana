@@ -1,14 +1,15 @@
 package wyhash
 
 import (
-	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"github.com/bytedance/gopkg/util/xxhash3"
-	"hash/crc32"
-	"hash/crc64"
 	"math/rand"
 	"testing"
 	"time"
+	"unsafe"
+
+	"github.com/minio/highwayhash"
 )
 
 func print_hash(s string) {
@@ -28,15 +29,15 @@ func TestMul64(t *testing.T) {
 
 	//println(U64(10))
 	//println(U64(11))
-	//println(wymum(5000000000, 11))
+	//println(wymix(5000000000, 11))
 	//SetSeed(uint64(time.Now().UnixNano()))
 	//fmt.Println(next())
 	//for i := 0; i < 10; i++ {
 	//	fmt.Println(NextFloat())
 	//}
 	//fmt.Println(NextGaussian())
-	//fmt.Println(wymum(10, 11), wymum2(10, 11))
-	//fmt.Println(wymum(192923, 9877732), wymum2(192923, 9877732))
+	//fmt.Println(wymix(10, 11), wymum2(10, 11))
+	//fmt.Println(wymix(192923, 9877732), wymum2(192923, 9877732))
 	//fmt.Println(1 ^ uint64(0xe7037ed1a0b428db))
 	//fmt.Println(99 ^ uint64(0xe7037ed1a0b428db))
 	//fmt.Println(HashString("hel"))
@@ -200,65 +201,73 @@ func testCollisions64(entries, multiplier, slots int, hasher func(uint64) uint64
 	return count
 }
 
-func crc64h(v uint32) uint32 {
-	h := crc64.New(crc64.MakeTable(crc64.ECMA))
-	h.Reset()
-	b := [4]byte{}
-	binary.LittleEndian.PutUint32(b[0:], v)
-	h.Write(b[0:4])
-	return uint32(h.Sum64())
+func TestU32(t *testing.T) {
+	v := uint32(565498879)
+	fmt.Println(U32(v))
+	bytes := *(*[4]byte)(unsafe.Pointer(&v))
+	fmt.Println(String(string(bytes[:])))
 }
 
-func crc32h(v uint32) uint32 {
-	h := crc32.NewIEEE()
-	h.Reset()
-	b := [4]byte{}
-	binary.LittleEndian.PutUint32(b[0:], v)
-	h.Write(b[0:4])
-	return h.Sum32()
+func TestU64(t *testing.T) {
+	v := uint64(5654654988749)
+	fmt.Println(U64(v))
+	bytes := *(*[8]byte)(unsafe.Pointer(&v))
+	fmt.Println(String(string(bytes[:])))
 }
 
-var crc16tab = [256]uint16{
-	0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50a5, 0x60c6, 0x70e7,
-	0x8108, 0x9129, 0xa14a, 0xb16b, 0xc18c, 0xd1ad, 0xe1ce, 0xf1ef,
-	0x1231, 0x0210, 0x3273, 0x2252, 0x52b5, 0x4294, 0x72f7, 0x62d6,
-	0x9339, 0x8318, 0xb37b, 0xa35a, 0xd3bd, 0xc39c, 0xf3ff, 0xe3de,
-	0x2462, 0x3443, 0x0420, 0x1401, 0x64e6, 0x74c7, 0x44a4, 0x5485,
-	0xa56a, 0xb54b, 0x8528, 0x9509, 0xe5ee, 0xf5cf, 0xc5ac, 0xd58d,
-	0x3653, 0x2672, 0x1611, 0x0630, 0x76d7, 0x66f6, 0x5695, 0x46b4,
-	0xb75b, 0xa77a, 0x9719, 0x8738, 0xf7df, 0xe7fe, 0xd79d, 0xc7bc,
-	0x48c4, 0x58e5, 0x6886, 0x78a7, 0x0840, 0x1861, 0x2802, 0x3823,
-	0xc9cc, 0xd9ed, 0xe98e, 0xf9af, 0x8948, 0x9969, 0xa90a, 0xb92b,
-	0x5af5, 0x4ad4, 0x7ab7, 0x6a96, 0x1a71, 0x0a50, 0x3a33, 0x2a12,
-	0xdbfd, 0xcbdc, 0xfbbf, 0xeb9e, 0x9b79, 0x8b58, 0xbb3b, 0xab1a,
-	0x6ca6, 0x7c87, 0x4ce4, 0x5cc5, 0x2c22, 0x3c03, 0x0c60, 0x1c41,
-	0xedae, 0xfd8f, 0xcdec, 0xddcd, 0xad2a, 0xbd0b, 0x8d68, 0x9d49,
-	0x7e97, 0x6eb6, 0x5ed5, 0x4ef4, 0x3e13, 0x2e32, 0x1e51, 0x0e70,
-	0xff9f, 0xefbe, 0xdfdd, 0xcffc, 0xbf1b, 0xaf3a, 0x9f59, 0x8f78,
-	0x9188, 0x81a9, 0xb1ca, 0xa1eb, 0xd10c, 0xc12d, 0xf14e, 0xe16f,
-	0x1080, 0x00a1, 0x30c2, 0x20e3, 0x5004, 0x4025, 0x7046, 0x6067,
-	0x83b9, 0x9398, 0xa3fb, 0xb3da, 0xc33d, 0xd31c, 0xe37f, 0xf35e,
-	0x02b1, 0x1290, 0x22f3, 0x32d2, 0x4235, 0x5214, 0x6277, 0x7256,
-	0xb5ea, 0xa5cb, 0x95a8, 0x8589, 0xf56e, 0xe54f, 0xd52c, 0xc50d,
-	0x34e2, 0x24c3, 0x14a0, 0x0481, 0x7466, 0x6447, 0x5424, 0x4405,
-	0xa7db, 0xb7fa, 0x8799, 0x97b8, 0xe75f, 0xf77e, 0xc71d, 0xd73c,
-	0x26d3, 0x36f2, 0x0691, 0x16b0, 0x6657, 0x7676, 0x4615, 0x5634,
-	0xd94c, 0xc96d, 0xf90e, 0xe92f, 0x99c8, 0x89e9, 0xb98a, 0xa9ab,
-	0x5844, 0x4865, 0x7806, 0x6827, 0x18c0, 0x08e1, 0x3882, 0x28a3,
-	0xcb7d, 0xdb5c, 0xeb3f, 0xfb1e, 0x8bf9, 0x9bd8, 0xabbb, 0xbb9a,
-	0x4a75, 0x5a54, 0x6a37, 0x7a16, 0x0af1, 0x1ad0, 0x2ab3, 0x3a92,
-	0xfd2e, 0xed0f, 0xdd6c, 0xcd4d, 0xbdaa, 0xad8b, 0x9de8, 0x8dc9,
-	0x7c26, 0x6c07, 0x5c64, 0x4c45, 0x3ca2, 0x2c83, 0x1ce0, 0x0cc1,
-	0xef1f, 0xff3e, 0xcf5d, 0xdf7c, 0xaf9b, 0xbfba, 0x8fd9, 0x9ff8,
-	0x6e17, 0x7e36, 0x4e55, 0x5e74, 0x2e93, 0x3eb2, 0x0ed1, 0x1ef0}
-
-func crc16a(v uint32) uint32 {
-	crc := uint16(0)
-	crc = ((crc << 8) & 0xff00) ^ crc16tab[((crc>>8)&0xff)^uint16(byte(v))]
-	crc = ((crc << 8) & 0xff00) ^ crc16tab[((crc>>8)&0xff)^uint16(byte(v<<8))]
-	crc = ((crc << 8) & 0xff00) ^ crc16tab[((crc>>8)&0xff)^uint16(byte(v<<16))]
-	crc = ((crc << 8) & 0xff00) ^ crc16tab[((crc>>8)&0xff)^uint16(byte(v<<24))]
-	return uint32(crc)
+func BenchmarkOptimized(b *testing.B) {
+	b.Run("Optimized U8", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			U8(byte(i + 1))
+		}
+	})
+	b.Run("Unoptimized U8", func(b *testing.B) {
+		b.ResetTimer()
+		var v byte
+		for i := 0; i < b.N; i++ {
+			v = byte(i)
+			Hash(unsafe.Pointer(&v), 1)
+		}
+	})
+	b.Run("Optimized U16", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			U16(uint16(i + 1))
+		}
+	})
+	b.Run("Unoptimized U16", func(b *testing.B) {
+		b.ResetTimer()
+		var v uint16
+		for i := 0; i < b.N; i++ {
+			v = uint16(i)
+			Hash(unsafe.Pointer(&v), 2)
+		}
+	})
+	b.Run("Optimized U32", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			U32(uint32(i + 1))
+		}
+	})
+	b.Run("Unoptimized U32", func(b *testing.B) {
+		b.ResetTimer()
+		for i := int32(0); i < int32(b.N); i++ {
+			Hash(unsafe.Pointer(&i), 4)
+		}
+	})
+	b.Run("Optimized U64", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			U64(uint64(i + 1))
+		}
+	})
+	b.Run("Unoptimized U64", func(b *testing.B) {
+		b.ResetTimer()
+		for i := int64(0); i < int64(b.N); i++ {
+			Hash(unsafe.Pointer(&i), 8)
+		}
+	})
 }
 
 func BenchmarkHash(b *testing.B) {
@@ -322,6 +331,30 @@ func BenchmarkHash(b *testing.B) {
 	})
 	b.Run("Hash 8", func(b *testing.B) {
 		str := "hellobye"
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			String(str)
+		}
+	})
+	b.Run("Hash 9", func(b *testing.B) {
+		str := "hellobyeh"
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			String(str)
+		}
+	})
+	b.Run("Hash 11", func(b *testing.B) {
+		str := "hellobyehel"
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			String(str)
+		}
+	})
+	b.Run("Hash 13", func(b *testing.B) {
+		str := "hellobyehello"
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -401,25 +434,83 @@ BenchmarkHash/Hash_129-8         	157599220	         7.098 ns/op
 BenchmarkHash/Hash_256
 BenchmarkHash/Hash_256-8         	100000000	        10.83 ns/op
 
+WyhashF4
+BenchmarkHash
+BenchmarkHash/Hash_U64
+BenchmarkHash/Hash_U64-8         	1000000000	         0.3195 ns/op
+BenchmarkHash/Hash_3
+BenchmarkHash/Hash_3-8           	389462864	         3.056 ns/op
+BenchmarkHash/Hash_5
+BenchmarkHash/Hash_5-8           	376605081	         3.170 ns/op
+BenchmarkHash/Hash_8
+BenchmarkHash/Hash_8-8           	373160917	         3.177 ns/op
+BenchmarkHash/Hash_9
+BenchmarkHash/Hash_9-8           	375572551	         3.184 ns/op
+BenchmarkHash/Hash_11
+BenchmarkHash/Hash_11-8          	375357028	         3.184 ns/op
+BenchmarkHash/Hash_13
+BenchmarkHash/Hash_13-8          	375741795	         3.188 ns/op
+BenchmarkHash/Hash_16
+BenchmarkHash/Hash_16-8          	353291739	         3.181 ns/op
+BenchmarkHash/Hash_32
+BenchmarkHash/Hash_32-8          	328011498	         3.647 ns/op
+BenchmarkHash/Hash_64
+BenchmarkHash/Hash_64-8          	254052578	         4.729 ns/op
+BenchmarkHash/Hash_128
+BenchmarkHash/Hash_128-8         	175286341	         6.813 ns/op
+BenchmarkHash/Hash_129
+BenchmarkHash/Hash_129-8         	160516773	         7.454 ns/op
+BenchmarkHash/Hash_256
+BenchmarkHash/Hash_256-8         	100000000	        11.08 ns/op
+
+WyhashF4 Default Optimized
+BenchmarkHash
+BenchmarkHash/Hash_U64
+BenchmarkHash/Hash_U64-8         	541850214	         2.227 ns/op
+BenchmarkHash/Hash_3
+BenchmarkHash/Hash_3-8           	439639683	         2.712 ns/op
+BenchmarkHash/Hash_5
+BenchmarkHash/Hash_5-8           	425250298	         2.842 ns/op
+BenchmarkHash/Hash_8
+BenchmarkHash/Hash_8-8           	424785966	         2.849 ns/op
+BenchmarkHash/Hash_9
+BenchmarkHash/Hash_9-8           	424775502	         2.842 ns/op
+BenchmarkHash/Hash_11
+BenchmarkHash/Hash_11-8          	420177139	         2.854 ns/op
+BenchmarkHash/Hash_13
+BenchmarkHash/Hash_13-8          	421709115	         2.844 ns/op
+BenchmarkHash/Hash_16
+BenchmarkHash/Hash_16-8          	421790827	         2.845 ns/op
+BenchmarkHash/Hash_32
+BenchmarkHash/Hash_32-8          	349303792	         3.433 ns/op
+BenchmarkHash/Hash_64
+BenchmarkHash/Hash_64-8          	248358012	         4.831 ns/op
+BenchmarkHash/Hash_128
+BenchmarkHash/Hash_128-8         	174078080	         6.945 ns/op
+BenchmarkHash/Hash_129
+BenchmarkHash/Hash_129-8         	155284183	         7.707 ns/op
+BenchmarkHash/Hash_256
+BenchmarkHash/Hash_256-8         	100000000	        11.39 ns/op
+
 BenchmarkXXHash
 BenchmarkXXHash/Hash_3
-BenchmarkXXHash/Hash_3-8         	361316500	         3.037 ns/op
+BenchmarkXXHash/Hash_3-8         	356664517	         3.063 ns/op
 BenchmarkXXHash/Hash_5
-BenchmarkXXHash/Hash_5-8         	346691133	         3.440 ns/op
+BenchmarkXXHash/Hash_5-8         	367344314	         3.250 ns/op
 BenchmarkXXHash/Hash_8
-BenchmarkXXHash/Hash_8-8         	338533942	         3.454 ns/op
+BenchmarkXXHash/Hash_8-8         	372347170	         3.209 ns/op
 BenchmarkXXHash/Hash_16
-BenchmarkXXHash/Hash_16-8        	362716063	         3.327 ns/op
+BenchmarkXXHash/Hash_16-8        	372898899	         3.201 ns/op
 BenchmarkXXHash/Hash_32
-BenchmarkXXHash/Hash_32-8        	265428247	         4.546 ns/op
+BenchmarkXXHash/Hash_32-8        	270837207	         4.435 ns/op
 BenchmarkXXHash/Hash_64
-BenchmarkXXHash/Hash_64-8        	197559765	         6.129 ns/op
+BenchmarkXXHash/Hash_64-8        	200117971	         6.011 ns/op
 BenchmarkXXHash/Hash_128
-BenchmarkXXHash/Hash_128-8       	129044548	         9.265 ns/op
+BenchmarkXXHash/Hash_128-8       	128223158	         9.281 ns/op
 BenchmarkXXHash/Hash_129
-BenchmarkXXHash/Hash_129-8       	122969744	         9.946 ns/op
+BenchmarkXXHash/Hash_129-8       	120736381	         9.899 ns/op
 BenchmarkXXHash/Hash_256
-BenchmarkXXHash/Hash_256-8       	48000000	        25.27 ns/op
+BenchmarkXXHash/Hash_256-8       	51440235	        22.55 ns/op
 */
 
 func BenchmarkXXHash(b *testing.B) {
@@ -459,12 +550,13 @@ func BenchmarkXXHash(b *testing.B) {
 	//		FNV32a(uint32((i + 1) * seed))
 	//	}
 	//})
-	//b.Run("Hash U64", func(b *testing.B) {
-	//	b.ResetTimer()
-	//	for i := 0; i < b.N; i++ {
-	//		U64(uint64(i + 1))
-	//	}
-	//})
+	b.Run("Hash U64", func(b *testing.B) {
+		b.ResetTimer()
+		for i := uint64(0); i < uint64(b.N); i++ {
+			buf := *(*[8]byte)(unsafe.Pointer(&i))
+			xxhash3.Hash(buf[:])
+		}
+	})
 	b.Run("Hash 3", func(b *testing.B) {
 		str := "hel"
 
@@ -535,6 +627,133 @@ func BenchmarkXXHash(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			xxhash3.HashString(str)
+		}
+	})
+}
+
+var hhkey []byte
+
+func init() {
+	var err error
+	hhkey, err = hex.DecodeString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+	if err != nil {
+		panic(err)
+	}
+}
+
+func BenchmarkHighwayHash(b *testing.B) {
+	const multiply = uint64(1)
+	seed := rand.Uint64()
+
+	//FNV64(FNV64((11 + 1) * seed))
+	String(StringWithCharset(128, charset))
+	String(StringWithCharset(3, charset))
+	String(StringWithCharset(4, charset))
+	String(StringWithCharset(16, charset))
+	String(StringWithCharset(32, charset))
+	String(StringWithCharset(51, charset))
+	String(StringWithCharset(64, charset))
+	String(StringWithCharset(96, charset))
+	String(StringWithCharset(128, charset))
+	String(StringWithCharset(256, charset))
+	U64(U64((11 + 1) * seed))
+
+	//b.Invoke("crc32", func(b *testing.B) {
+	//	for i := 0; i < b.N; i++ {
+	//		crc32h(23)
+	//	}
+	//})
+	//b.Invoke("crc16", func(b *testing.B) {
+	//	for i := 0; i < b.N; i++ {
+	//		crc16a(23)
+	//	}
+	//})
+	//b.Invoke("crc16", func(b *testing.B) {
+	//	for i := 0; i < b.N; i++ {
+	//		crc16a(23)
+	//	}
+	//})
+	//b.Invoke("FNV64a", func(b *testing.B) {
+	//	for i := uint64(0); i < uint64(b.N)*multiply; i++ {
+	//		FNV32a(uint32((i + 1) * seed))
+	//	}
+	//})
+	//b.Run("Hash U64", func(b *testing.B) {
+	//	b.ResetTimer()
+	//	for i := 0; i < b.N; i++ {
+	//		U64(uint64(i + 1))
+	//	}
+	//})
+	b.Run("Hash 3", func(b *testing.B) {
+		str := []byte("hel")
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			highwayhash.Sum64(str, hhkey)
+		}
+	})
+	b.Run("Hash 5", func(b *testing.B) {
+		str := []byte("hello")
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			highwayhash.Sum64(str, hhkey)
+		}
+	})
+	b.Run("Hash 8", func(b *testing.B) {
+		str := []byte("hellobye")
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			highwayhash.Sum64(str, hhkey)
+		}
+	})
+	b.Run("Hash 16", func(b *testing.B) {
+		str := []byte("hellobyehellobye")
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			highwayhash.Sum64(str, hhkey)
+		}
+	})
+	b.Run("Hash 32", func(b *testing.B) {
+		str := []byte("hellobyehellobyehellobyehellobye")
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			highwayhash.Sum64(str, hhkey)
+		}
+	})
+	b.Run("Hash 64", func(b *testing.B) {
+		str := []byte("hellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobye")
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			highwayhash.Sum64(str, hhkey)
+		}
+	})
+	b.Run("Hash 128", func(b *testing.B) {
+		str := []byte("hellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobye")
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			highwayhash.Sum64(str, hhkey)
+		}
+	})
+	b.Run("Hash 129", func(b *testing.B) {
+		str := []byte("hello there today ok hello there today ok hello there today ok o hello there today ok hello there today ok hello there today ok o")
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			highwayhash.Sum64(str, hhkey)
+		}
+	})
+	b.Run("Hash 256", func(b *testing.B) {
+		str := []byte("hellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobyehellobye")
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			highwayhash.Sum64(str, hhkey)
 		}
 	})
 }

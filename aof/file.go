@@ -2,7 +2,6 @@ package aof
 
 import (
 	"errors"
-	"github.com/moontrade/kirana/pkg/atomicx"
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/mmap"
 	"github.com/moontrade/kirana/pkg/pool"
@@ -45,11 +44,12 @@ func (s *FileState) store(value FileState) {
 }
 
 func (s *FileState) xchg(value FileState) FileState {
-	return FileState(atomicx.Xchgint32((*int32)(s), int32(value)))
+	return FileState(atomic.SwapInt32((*int32)(s), int32(value)))
+	//return FileState(atomicx.Xchgint32((*int32)(s), int32(value)))
 }
 
 func (s *FileState) cas(old, new FileState) bool {
-	return atomicx.Casint32((*int32)(s), int32(old), int32(new))
+	return atomic.CompareAndSwapInt32((*int32)(s), int32(old), int32(new))
 }
 
 var (
@@ -298,13 +298,16 @@ func (m *Manager) Open(name string, geometry Geometry, recovery Recovery) (aof *
 
 	var data mmap.MMap
 	before := timex.NanoTime()
+	// Is the file done appending?
 	if aof.state == FileStateEOF {
+		// Map the entire size of the file.
 		if aof.readOnly {
 			data, aof.err = mmap.MapRegion(aof.f, int(aof.fileSize), mmap.RDONLY, 0, 0)
 		} else {
 			data, aof.err = mmap.MapRegion(aof.f, int(aof.fileSize), mmap.RDWR, 0, 0)
 		}
 	} else {
+		// Map the max size the file can be.
 		data, aof.err = mmap.MapRegion(aof.f, int(geometry.SizeUpper), mmap.RDWR, 0, 0)
 	}
 	after := timex.NanoTime()

@@ -25,7 +25,7 @@ func TestPin(t *testing.T) {
 	Unpin()
 	t.Log(n)
 	var wg sync.WaitGroup
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+	for i := 0; i < runtime.GOMAXPROCS(0)*2; i++ {
 		wg.Add(1)
 		go func() {
 			n := Pin()
@@ -33,6 +33,7 @@ func TestPin(t *testing.T) {
 			t.Log(n)
 			wg.Done()
 		}()
+		runtime.Gosched()
 	}
 	wg.Wait()
 }

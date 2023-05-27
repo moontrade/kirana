@@ -32,25 +32,25 @@ func (nr *Sharded[T]) Shard() *Bounded[T] {
 }
 
 func (nr *Sharded[T]) Push(data *T) bool {
-	return nr.Shard().Push(data)
+	return nr.Shard().Enqueue(data)
 }
 
 func (nr *Sharded[T]) PushUnsafe(data unsafe.Pointer) bool {
-	return nr.Shard().PushUnsafe(data)
+	return nr.Shard().EnqueueUnsafe(data)
 }
 
 func (nr *Sharded[T]) Pop() *T {
-	return nr.Shard().Pop()
+	return nr.Shard().Dequeue()
 }
 
 func (nr *Sharded[T]) PopDeref() T {
-	return nr.Shard().PopDeref()
+	return nr.Shard().DequeueDeref()
 }
 
 func (nr *Sharded[T]) PopMany(max int, fn func(*T)) int {
-	return nr.Shard().PopMany(max, fn)
+	return nr.Shard().DequeueMany(max, fn)
 }
 
 func (nr *Sharded[T]) PopManyDeref(max int, fn func(T)) int {
-	return nr.Shard().PopManyDeref(max, fn)
+	return nr.Shard().DequeueManyDeref(max, fn)
 }

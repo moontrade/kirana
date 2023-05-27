@@ -1,4 +1,4 @@
-package main
+package arrowx
 
 import (
 	"github.com/moontrade/unsafe/memory"

@@ -1,7 +1,6 @@
 package spinlock
 
 import (
-	"github.com/moontrade/kirana/pkg/atomicx"
 	"runtime"
 	"sync/atomic"
 )
@@ -20,8 +19,8 @@ func (sl *Mutex) Lock() {
 
 // TryLock tries to lock the SpinLock.
 func (sl *Mutex) TryLock() bool {
-	return atomicx.Cas(&sl.lock, 0, 1)
-	//return atomic.CompareAndSwapUint32(&sl.lock, 0, 1)
+	//return atomicx.Cas(&sl.lock, 0, 1)
+	return atomic.CompareAndSwapUint32(&sl.lock, 0, 1)
 }
 
 // Unlock unlocks the SpinLock.

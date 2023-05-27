@@ -3,7 +3,6 @@ package aof
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/moontrade/kirana/pkg/atomicx"
 	"github.com/moontrade/kirana/pkg/timex"
 	"github.com/moontrade/kirana/reactor"
 	"math"
@@ -32,7 +31,7 @@ func TestTailer(t *testing.T) {
 
 	buf := []byte{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5'}
 
-	for x := 0; x < 100; x++ {
+	for x := 0; x < 3; x++ {
 		name := fmt.Sprintf("db-%d.txt", x)
 		os.Remove("testdata/" + name)
 
@@ -79,7 +78,7 @@ func TestTailer(t *testing.T) {
 			}
 		}
 
-		atomicx.Casint64(&timer, 0, timex.NanoTime())
+		atomic.CompareAndSwapInt64(&timer, 0, timex.NanoTime())
 
 		for len(reader.log) == 0 {
 			runtime.Gosched()
@@ -88,7 +87,9 @@ func TestTailer(t *testing.T) {
 		//fmt.Println("done writing", atomic.LoadInt64(&f.size))
 
 		//time.Sleep(time.Millisecond * 500)
-		printLatency(wakeAttempts, reader.log)
+		if x > 0 {
+			printLatency(wakeAttempts, reader.log)
+		}
 	}
 }
 

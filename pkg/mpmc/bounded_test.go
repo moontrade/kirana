@@ -32,13 +32,13 @@ func BenchmarkMPSC(b *testing.B) {
 	//		fmt.Println(c.Load())
 	//	}
 	//}()
-	rb.Push(task)
+	rb.Enqueue(task)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		rb.Push(task)
-		rb.Pop()
+		rb.Enqueue(task)
+		rb.Dequeue()
 		//<-rb.wakeCh
 		//if t != task {
 		//	b.Fatal("bad")
@@ -47,7 +47,7 @@ func BenchmarkMPSC(b *testing.B) {
 		//if ok {
 		//
 		//}
-		//rb.PopMany(func(v int) {})
+		//rb.DequeueMany(func(v int) {})
 	}
 	b.StopTimer()
 	//fmt.Println("Wake Count", rb.wakeCount.Load())
@@ -72,11 +72,11 @@ func TestMPSC(t *testing.T) {
 	//		fmt.Println(c.Load())
 	//	}
 	//}()
-	//rb.Push(task)
+	//rb.Enqueue(task)
 
 	for i := 0; i < 64; i++ {
-		rb.Push(task)
-		rb.Pop()
+		rb.Enqueue(task)
+		rb.Dequeue()
 		//<-rb.wakeCh
 		//if t != task {
 		//	b.Fatal("bad")
@@ -85,7 +85,7 @@ func TestMPSC(t *testing.T) {
 		//if ok {
 		//
 		//}
-		//rb.PopMany(func(v int) {})
+		//rb.DequeueMany(func(v int) {})
 	}
 
 	//fmt.Println("Wake Count", rb.wakeCount.Load())
@@ -121,10 +121,10 @@ func TestConcurrent(t *testing.T) {
 
 			for x := 0; x < iterations; x++ {
 				dispatched.Incr()
-				for !bp.PushUnsafe(fnp) {
+				for !bp.EnqueueUnsafe(fnp) {
 					runtime.Gosched()
 				}
-				//if !bp.PushUnsafe(fnp) {
+				//if !bp.EnqueueUnsafe(fnp) {
 				//	c.Incr()
 				//	overflowCount.Incr()
 				//}
@@ -142,13 +142,13 @@ func TestConcurrent(t *testing.T) {
 			}
 
 			for {
-				//t := bp.PopDeref()
+				//t := bp.DequeueDeref()
 				//if t != nil {
 				//	t()
 				//} else {
 				//	runtime.Gosched()
 				//}
-				bp.PopManyDeref(math.MaxUint32, onTask)
+				bp.DequeueManyDeref(math.MaxUint32, onTask)
 			}
 		}()
 	}
@@ -157,7 +157,7 @@ func TestConcurrent(t *testing.T) {
 
 	//for x := 0; x < iterations; x++ {
 	//	dispatched.Incr()
-	//	if !bp.PushUnsafe(fnp) {
+	//	if !bp.EnqueueUnsafe(fnp) {
 	//		c.Incr()
 	//		overflowCount.Incr()
 	//	}

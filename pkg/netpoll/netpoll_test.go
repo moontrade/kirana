@@ -3,7 +3,7 @@ package netpoll
 import (
 	"fmt"
 	"github.com/moontrade/kirana/pkg/counter"
-	"github.com/moontrade/kirana/pkg/mpsc"
+	"github.com/moontrade/kirana/pkg/mpmc"
 	"math"
 	"runtime"
 	"testing"
@@ -60,7 +60,7 @@ func BenchmarkWake(b *testing.B) {
 		c.Incr()
 	}
 
-	queue := mpsc.NewBounded[func()](int64(b.N)*2, nil)
+	queue := mpmc.NewBoundedWake[func()](int64(b.N)*2, nil)
 
 	flushTasks := func(fn *func()) {
 		(*fn)()
@@ -68,14 +68,14 @@ func BenchmarkWake(b *testing.B) {
 
 	onEvent := func(index, count, fd int, filter int16, conn *Task) error {
 		if fd == 0 {
-			queue.PopMany(math.MaxUint32, flushTasks)
+			queue.DequeueMany(math.MaxUint32, flushTasks)
 			return nil
 		}
 		return nil
 	}
 
 	onLoop := func(count int) (time.Duration, error) {
-		queue.PopMany(math.MaxUint32, flushTasks)
+		queue.DequeueMany(math.MaxUint32, flushTasks)
 
 		//end = timex.NanoTime()
 		if count == 0 {
@@ -88,7 +88,7 @@ func BenchmarkWake(b *testing.B) {
 	go func() {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
-		//queue.PopMany(math.MaxUint32, func(fn *func()) bool {
+		//queue.DequeueMany(math.MaxUint32, func(fn *func()) bool {
 		//	(*fn)()
 		//	return true
 		//})
@@ -100,7 +100,7 @@ func BenchmarkWake(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		queue.Push(&fn)
+		queue.Enqueue(&fn)
 		_ = poll.Wake()
 		if i%1000000 == 0 {
 			//_ = poll.Wake()

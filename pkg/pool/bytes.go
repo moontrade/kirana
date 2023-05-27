@@ -4,7 +4,22 @@ import (
 	"unsafe"
 )
 
-var defaultBytes = NewByteSlices(DefaultSizeClasses())
+var defaultBytes *ByteSlices
+
+func init() {
+	defaultBytes = NewByteSlices(DefaultSizeClasses())
+	//pools := defaultBytes.s.pools
+	//for _, p := range pools {
+	//	if p == nil {
+	//		continue
+	//	}
+	//	if p.SizeClass() <= 1024 {
+	//		for i := 0; i < len(p.shards); i++ {
+	//			p.shards[i].fillHalf()
+	//		}
+	//	}
+	//}
+}
 
 func DefaultBytes() *ByteSlices {
 	return defaultBytes
@@ -12,39 +27,39 @@ func DefaultBytes() *ByteSlices {
 
 func DefaultSizeClasses() *SizeClasses {
 	return &SizeClasses{
-		Size8:    SlabConfig{4096, 256},
-		Size16:   SlabConfig{4096, 256},
-		Size32:   SlabConfig{4096, 256},
-		Size64:   SlabConfig{4096, 256},
-		Size128:  SlabConfig{4096, 256},
-		Size256:  SlabConfig{4096, 1024},
-		Size512:  SlabConfig{4096, 1024},
-		Size1KB:  SlabConfig{1024, 64},
-		Size2KB:  SlabConfig{256, 64},
-		Size4KB:  SlabConfig{256, 64},
-		Size8KB:  SlabConfig{256, 64},
-		Size16KB: SlabConfig{64, 64},
-		Size32KB: SlabConfig{64, 64},
-		Size64KB: SlabConfig{64, 64},
+		Size8:   SizeClass{16384, 1024},
+		Size16:  SizeClass{16384, 256},
+		Size32:  SizeClass{16384, 256},
+		Size64:  SizeClass{16384, 256},
+		Size128: SizeClass{16384, 256},
+		Size256: SizeClass{1024, 256},
+		Size512: SizeClass{64, 256},
+		Size1K:  SizeClass{64, 64},
+		Size2K:  SizeClass{64, 64},
+		Size4K:  SizeClass{64, 64},
+		Size8K:  SizeClass{64, 64},
+		Size16K: SizeClass{64, 64},
+		Size32K: SizeClass{64, 64},
+		Size64K: SizeClass{64, 64},
 	}
 }
 
 //func DefaultSizeClasses() *SizeClasses {
 //	return &SizeClasses{
-//		Size8:     SlabConfig{1024 * 1024, 1024},
-//		Size16:    SlabConfig{1024 * 1024, 1024},
-//		Size32:    SlabConfig{1024 * 1024, 1024},
-//		Size64:    SlabConfig{1024 * 1024, 1024},
-//		Size128:   SlabConfig{1024 * 1024, 1024},
-//		Size256:   SlabConfig{1024, 1024},
-//		Size512:   SlabConfig{1024, 1024},
-//		Size1KB:  SlabConfig{256, 512},
-//		Size2KB:  SlabConfig{256, 256},
-//		Size4KB:  SlabConfig{256, 256},
-//		Size8KB:  SlabConfig{256, 256},
-//		Size16KB: SlabConfig{128, 128},
-//		Size32KB: SlabConfig{128, 128},
-//		Size64KB: SlabConfig{64, 64},
+//		Size8:     SizeClass{1024 * 1024, 1024},
+//		Size16:    SizeClass{1024 * 1024, 1024},
+//		Size32:    SizeClass{1024 * 1024, 1024},
+//		Size64:    SizeClass{1024 * 1024, 1024},
+//		Size128:   SizeClass{1024 * 1024, 1024},
+//		Size256:   SizeClass{1024, 1024},
+//		Size512:   SizeClass{1024, 1024},
+//		Size1K:  SizeClass{256, 512},
+//		Size2K:  SizeClass{256, 256},
+//		Size4K:  SizeClass{256, 256},
+//		Size8K:  SizeClass{256, 256},
+//		Size16K: SizeClass{128, 128},
+//		Size32K: SizeClass{128, 128},
+//		Size64K: SizeClass{64, 64},
 //	}
 //}
 
@@ -54,7 +69,7 @@ type ByteSlices struct {
 
 func NewByteSlices(sizes *SizeClasses) *ByteSlices {
 	return &ByteSlices{s: NewSlices[byte](&Config[[]byte]{
-		//ShardFunc: ShardByGoroutineID,
+		//NumShards: runtime.GOMAXPROCS(0),
 	}, sizes)}
 }
 
