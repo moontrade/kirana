@@ -15,7 +15,6 @@
 package runtimex
 
 import (
-	"github.com/moontrade/kirana/pkg/gid"
 	_ "unsafe"
 )
 
@@ -40,7 +39,7 @@ func Unpin() {
 
 // Pid returns the id of current p.
 func Pid() (id int) {
-	return int(gid.PID())
+	return int(ProcessorID())
 	//id = runtime_procPin()
 	//runtime_procUnpin()
 	//return

@@ -336,7 +336,7 @@ func TestConcurrentSyncPool(t *testing.T) {
 }
 
 func TestConcurrentPool(t *testing.T) {
-	iterations := 1000000
+	iterations := 10000000
 	numConsumers := 8
 	totalIterations := numConsumers * iterations
 	finalCount := int64(totalIterations - 1)

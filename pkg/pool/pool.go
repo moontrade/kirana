@@ -3,9 +3,9 @@ package pool
 import (
 	"errors"
 	"github.com/moontrade/kirana/pkg/counter"
-	"github.com/moontrade/kirana/pkg/gid"
 	"github.com/moontrade/kirana/pkg/mpmc"
 	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/runtimex"
 	"github.com/moontrade/kirana/pkg/spinlock"
 	"math"
 	"runtime"
@@ -124,12 +124,13 @@ func (p *Pool[T]) Len() int {
 }
 
 func (p *Pool[T]) Shard() *Shard[T] {
-	pid := int(gid.PID())
-	if len(p.shards) <= pid {
-		return &p.shards[pid]
-	} else {
-		return &p.shards[pid&p.mask]
-	}
+	pid := int(runtimex.ProcessorID())
+	return &p.shards[pid&p.mask]
+	//if len(p.shards) <= pid {
+	//	return &p.shards[pid]
+	//} else {
+	//	return &p.shards[pid&p.mask]
+	//}
 }
 
 func (p *Pool[T]) Get() *T {
@@ -137,32 +138,36 @@ func (p *Pool[T]) Get() *T {
 }
 
 func (p *Pool[T]) GetUnsafe() unsafe.Pointer {
-	pid := int(gid.PID())
-	if pid < len(p.shards) {
-		v := p.shards[pid].GetUnsafe()
-		return v
-	} else {
-		v := p.shards[pid&p.mask].GetUnsafe()
-		return v
-	}
+	pid := int(runtimex.ProcessorID())
+	v := p.shards[pid&p.mask].GetUnsafe()
+	return v
+	//if pid < len(p.shards) {
+	//	v := p.shards[pid].GetUnsafe()
+	//	return v
+	//} else {
+	//	v := p.shards[pid&p.mask].GetUnsafe()
+	//	return v
+	//}
 }
 
 func (p *Pool[T]) Put(data *T) {
-	pid := int(gid.PID())
-	if len(p.shards) > pid {
-		p.shards[pid].PutUnsafe(unsafe.Pointer(data))
-	} else {
-		p.shards[pid&p.mask].PutUnsafe(unsafe.Pointer(data))
-	}
+	pid := int(runtimex.ProcessorID())
+	p.shards[pid&p.mask].PutUnsafe(unsafe.Pointer(data))
+	//if len(p.shards) > pid {
+	//	p.shards[pid].PutUnsafe(unsafe.Pointer(data))
+	//} else {
+	//	p.shards[pid&p.mask].PutUnsafe(unsafe.Pointer(data))
+	//}
 }
 
 func (p *Pool[T]) PutUnsafe(data unsafe.Pointer) {
-	pid := int(gid.PID())
-	if len(p.shards) > pid {
-		p.shards[pid].PutUnsafe(data)
-	} else {
-		p.shards[pid&p.mask].PutUnsafe(data)
-	}
+	pid := int(runtimex.ProcessorID())
+	p.shards[pid&p.mask].PutUnsafe(data)
+	//if len(p.shards) > pid {
+	//	p.shards[pid].PutUnsafe(data)
+	//} else {
+	//	p.shards[pid&p.mask].PutUnsafe(data)
+	//}
 }
 
 type ShardStats struct {

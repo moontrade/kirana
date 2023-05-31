@@ -43,6 +43,24 @@ BenchmarkSpinLock_Lock/sync.RWMutex_4_threads-8    	 2532800	       472.1 ns/op
 BenchmarkSpinLock_Lock/sync.RWMutex_8_threads
 BenchmarkSpinLock_Lock/sync.RWMutex_8_threads-8    	 1218156	       983.8 ns/op
 
+BenchmarkSpinLock_Lock
+BenchmarkSpinLock_Lock/Spinlock_1_thread
+BenchmarkSpinLock_Lock/Spinlock_1_thread-8         	142653266	         8.401 ns/op
+BenchmarkSpinLock_Lock/Spinlock_2_threads
+BenchmarkSpinLock_Lock/Spinlock_2_threads-8        	59952537	        18.96 ns/op
+BenchmarkSpinLock_Lock/Spinlock_4_threads
+BenchmarkSpinLock_Lock/Spinlock_4_threads-8        	31638408	        40.64 ns/op
+BenchmarkSpinLock_Lock/Spinlock_8_threads
+BenchmarkSpinLock_Lock/Spinlock_8_threads-8        	10900428	       105.5 ns/op
+BenchmarkSpinLock_Lock/Spinlock_16_threads
+BenchmarkSpinLock_Lock/Spinlock_16_threads-8       	 6543055	       197.4 ns/op
+BenchmarkSpinLock_Lock/Spinlock_32_threads
+BenchmarkSpinLock_Lock/Spinlock_32_threads-8       	 3087135	       367.8 ns/op
+BenchmarkSpinLock_Lock/Spinlock_64_threads
+BenchmarkSpinLock_Lock/Spinlock_64_threads-8       	 1601656	       699.0 ns/op
+BenchmarkSpinLock_Lock/Spinlock_128_threads
+BenchmarkSpinLock_Lock/Spinlock_128_threads-8      	  834528	      1400 ns/op
+
 Relaxed CAS and Add scales a better
 atomicx.Cas
 BenchmarkSpinLock_Lock/Spinlock_1_thread

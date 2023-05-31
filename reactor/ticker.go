@@ -19,7 +19,6 @@ import (
 	"github.com/moontrade/kirana/pkg/util"
 	logger "github.com/moontrade/log"
 	"github.com/moontrade/unsafe/cgo"
-	cgoHelper "github.com/moontrade/unsafe/cgo/cgo"
 	"os"
 	"runtime"
 	"sync"
@@ -170,7 +169,7 @@ func (t *Ticker) run() {
 
 func park(duration time.Duration) {
 	//time.Sleep(duration)
-	cgo.NonBlocking((*byte)(cgoHelper.Sleep), uintptr(duration), 0)
+	cgo.NonBlockingSleep(duration)
 }
 
 type TickListener struct {

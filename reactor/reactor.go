@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/moontrade/kirana/pkg/counter"
-	"github.com/moontrade/kirana/pkg/gid"
 	"github.com/moontrade/kirana/pkg/hashmap"
 	"github.com/moontrade/kirana/pkg/mpmc"
 	"github.com/moontrade/kirana/pkg/pmath"
@@ -57,6 +56,8 @@ type Stats struct {
 	pidSwitches        counter.Counter
 }
 
+type Runnable interface{}
+
 var (
 	ErrQueueFull = errors.New("queue full")
 	ErrStop      = errors.New("stop")
@@ -85,7 +86,7 @@ type Config struct {
 // slots gives an interval duration of 20ms with each 4ms handling ~20% of the load. The
 // timing is constantly adjusting to ensure the tickDur duration is accurate from the start
 // adjusting for CPU Time.
-// In addition, there is a lock-free MPSC queue that accepts invokes to run immediately
+// In addition, there is a lock-free MPMC queue that accepts invokes to run immediately
 // without having to wait for a Tick.
 type Reactor struct {
 	Stats
@@ -109,7 +110,7 @@ type Reactor struct {
 	tickDur        time.Duration
 	ticksPerLevel2 int64
 	ticksPerLevel3 int64
-	tasks          *hashmap.Sync[int64, *Task]
+	tasks          *hashmap.SyncMap[int64, *Task]
 	ctx            context.Context
 	cancel         context.CancelFunc
 	tickCount      counter.Counter
@@ -164,7 +165,7 @@ func NewReactor(config Config) (*Reactor, error) {
 		level3Wheel:    config.Level3Wheel,
 		ticksPerLevel3: int64(config.Level3Wheel.tickDur / config.Level1Wheel.tickDur),
 		wakeCh:         wakeCh,
-		tasks:          hashmap.NewSync[int64, *Task](8, 1024, hashmap.HashInt64),
+		tasks:          hashmap.NewSyncMap[int64, *Task](8, 1024, hashmap.HashInt64),
 		wakeQ:          mpmc.NewBoundedWake[Task](int64(config.WakeQSize), wakeCh),
 		wakeListQ:      mpmc.NewBoundedWake[WakeList](int64(config.WakeQSize), wakeCh),
 		spawnQ:         mpmc.NewBoundedWake[Task](int64(config.SpawnQSize), wakeCh),
@@ -178,7 +179,7 @@ func NewReactor(config Config) (*Reactor, error) {
 }
 
 func (r *Reactor) CheckGID() bool {
-	return r.gid == gid.GID()
+	return r.gid == runtimex.GoroutineID()
 }
 
 func (r *Reactor) ID() int { return r.id }
@@ -265,7 +266,7 @@ func (r *Reactor) Invoke(fn func()) bool {
 	if fn == nil {
 		return false
 	}
-	return r.invokeQ.EnqueueUnsafe(runtimex.FuncToPointer(fn))
+	return r.invokeQ.EnqueueUnsafeTimeout(runtimex.FuncToPointer(fn), time.Second*5)
 }
 
 func (r *Reactor) InvokeRef(fn *func()) bool {
@@ -279,7 +280,7 @@ func (r *Reactor) InvokeBlocking(fn func()) bool {
 	if fn == nil {
 		return false
 	}
-	return InvokeBlocking(fn)
+	return EnqueueBlocking(fn)
 }
 
 func (r *Reactor) Spawn(future Future) (*Task, error) {
@@ -316,7 +317,7 @@ func (r *Reactor) SpawnInterval(future Future, interval time.Duration) (*Task, e
 	return task, nil
 }
 
-func (r *Reactor) SpawnWorker(fn func()) error {
+func (r *Reactor) SpawnWorkerFn(fn func()) error {
 	return ants.Submit(fn)
 }
 
@@ -332,7 +333,7 @@ func (r *Reactor) run() {
 		defer runtime.UnlockOSThread()
 	}
 
-	r.gid, r.pid = gid.GIDPID()
+	r.gid, r.pid = runtimex.GIDPID()
 	tick, err := initTicker(r.tickDur).Register(r.tickDur, r, r.wakeCh)
 	if err != nil {
 		panic(err)
@@ -707,8 +708,8 @@ func (r *Reactor) pollInterval(now int64, list *taskSwapList, task *Task) bool {
 func (r *Reactor) Print() {
 	avg := time.Duration(r.ticksDur.Load()) / time.Duration(r.currentTick)
 	fmt.Println("Size			", r.size.Load())
-	fmt.Println("PID				", r.pid)
-	fmt.Println("PID Switches	", r.pidSwitches.Load())
+	fmt.Println("ProcessorID				", r.pid)
+	fmt.Println("ProcessorID Switches	", r.pidSwitches.Load())
 	//fmt.Println("Capacity		", r.cap)
 	fmt.Println("Ticks			", r.currentTick)
 	//fmt.Println("Ticks Dur 		", Time.Duration(r.ticksDur.Load()))

@@ -1,6 +1,7 @@
 package arrowx
 
 import (
+	"fmt"
 	"github.com/moontrade/unsafe/memory"
 	"reflect"
 	"unsafe"
@@ -11,6 +12,7 @@ var OffHeap offHeap
 type offHeap struct{}
 
 func (offHeap) Allocate(size int) []byte {
+	fmt.Println("Allocate", size)
 	return *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
 		Data: uintptr(memory.Alloc(uintptr(size))),
 		Len:  size,
@@ -19,6 +21,7 @@ func (offHeap) Allocate(size int) []byte {
 }
 
 func (offHeap) Reallocate(size int, b []byte) []byte {
+	fmt.Println("Reallocate", len(b), size)
 	if len(b) < 1 {
 		if size < 1 {
 			return nil
@@ -38,6 +41,7 @@ func (offHeap) Reallocate(size int, b []byte) []byte {
 }
 
 func (offHeap) Free(b []byte) {
+	fmt.Println("Free", len(b))
 	if cap(b) == 0 {
 		return
 	}

@@ -8,7 +8,6 @@ package netpoll
 
 import "C"
 import (
-	"github.com/moontrade/kirana/pkg/atomicx"
 	"github.com/panjf2000/gnet/v2/pkg/errors"
 	"golang.org/x/sys/unix"
 	"runtime"
@@ -75,13 +74,16 @@ func (p *Poll[T]) Close() error {
 
 // Wake ...
 func (p *Poll[T]) Wake() error {
-	if atomicx.Casint32(&p.wait, 0, 1) {
-		//if atomicx.Xchgint32(&p.wait, 1) == 0 {
-		//if atomic.CompareAndSwapInt32(&p.wait, 0, 1) {
+	//if atomicx.Casint32(&p.wait, 0, 1) {
+	//if atomicx.Xchgint32(&p.wait, 1) == 0 {
+	if atomic.CompareAndSwapInt32(&p.wait, 0, 1) {
 		_, err := syscall.Kevent(p.fd, wakeEvents, nil, nil)
 		return err
 	}
 	return nil
+	//
+	//_, err := syscall.Kevent(p.fd, wakeEvents, nil, nil)
+	//return err
 }
 
 //goland:noinspection ALL

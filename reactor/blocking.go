@@ -3,6 +3,7 @@ package reactor
 import (
 	"context"
 	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/fastrand"
 	"github.com/moontrade/kirana/pkg/mpmc"
 	"github.com/moontrade/kirana/pkg/pmath"
 	"github.com/moontrade/kirana/pkg/runtimex"
@@ -14,8 +15,8 @@ import (
 	"time"
 )
 
-func InvokeBlocking(task func()) bool {
-	return blocking.Invoke(task)
+func EnqueueBlocking(task func()) bool {
+	return blocking.Enqueue(task)
 }
 
 // BlockingPool executes tasks that may block, but *should execute rather quickly <1s.
@@ -25,12 +26,14 @@ func InvokeBlocking(task func()) bool {
 type BlockingPool struct {
 	started     int64
 	workers     []*blockingWorker
-	workersMask int64
+	workersMask int32
 	idleCount   counter.Counter
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	jobs        counter.Counter
+	done        counter.Counter
+	err         counter.Counter
 	jobsDur     counter.TimeCounter
 	jobsDurMin  counter.Counter
 	jobsDurMax  counter.Counter
@@ -48,9 +51,10 @@ func NewBlockingPool(numWorkers, queueSize int) *BlockingPool {
 	numWorkers = pmath.CeilToPowerOf2(numWorkers)
 	workers := make([]*blockingWorker, numWorkers)
 	bp := &BlockingPool{
-		started: timex.NanoTime(),
-		workers: workers,
-		profile: false,
+		started:     timex.NanoTime(),
+		workers:     workers,
+		profile:     false,
+		workersMask: int32(numWorkers - 1),
 	}
 	bp.ctx, bp.cancel = context.WithCancel(context.Background())
 	bp.wg.Add(len(workers))
@@ -70,6 +74,12 @@ func NewBlockingPool(numWorkers, queueSize int) *BlockingPool {
 	return bp
 }
 
+func (b *BlockingPool) Checkpoint() {
+	for b.jobs.Load() > b.done.Load() {
+		time.Sleep(time.Millisecond * 100)
+	}
+}
+
 func (b *BlockingPool) Close() error {
 	b.cancel()
 	for _, worker := range b.workers {
@@ -78,9 +88,34 @@ func (b *BlockingPool) Close() error {
 	return nil
 }
 
-func (b *BlockingPool) Invoke(fn func()) bool {
-	worker := b.workers[b.jobs.Incr()&b.workersMask]
-	return worker.queue.EnqueueUnsafe(runtimex.FuncToPointer(fn))
+func (b *BlockingPool) Enqueue(fn func()) bool {
+	var (
+		idx    = fastrand.Uint32n(uint32(len(b.workers)))
+		worker = b.workers[idx]
+		count  = 0
+		fnp    = runtimex.FuncToPointer(fn)
+	)
+
+	for !worker.queue.EnqueueUnsafe(fnp) {
+		if count%len(b.workers) == 0 {
+			runtime.Gosched()
+		}
+		idx++
+		count++
+		if idx >= uint32(len(b.workers)) {
+			idx = 0
+		}
+		worker = b.workers[idx]
+	}
+
+	//worker := b.workers[gid.ProcessorID()&b.workersMask]
+	//if !worker.queue.EnqueueUnsafeTimeout(runtimex.FuncToPointer(fn), time.Second*10) {
+	//	//if !worker.queue.EnqueueUnsafe(runtimex.FuncToPointer(fn)) {
+	//	b.done.Incr()
+	//	b.err.Incr()
+	//	return false
+	//}
+	return true
 }
 
 type blockingWorker struct {
@@ -106,25 +141,21 @@ func (w *blockingWorker) run() {
 		w.wg.Done()
 		w.pool.wg.Done()
 	}()
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 	var (
 		queue     = w.queue
 		queueWake = queue.Wake()
 		done      = w.ctx.Done()
-		profile   = w.pool.profile
 		begin     = timex.NanoTime()
 		elapsed   = begin
-		timer     = time.NewTimer(time.Microsecond * 50)
 	)
-	_ = timer
 	onTask := func(task func()) {
 		w.jobs.Incr()
-		if profile {
+		defer w.pool.done.Incr()
+		if w.pool.profile {
 			begin = timex.NanoTime()
 		}
 		w.invoke(task)
-		if profile {
+		if w.pool.profile {
 			elapsed = timex.NanoTime() - begin
 			w.jobsDur.Add(elapsed)
 			if w.jobsDurMin == 0 {
@@ -141,6 +172,7 @@ Loop:
 		//n := queue.DequeueManyDeref(math.MaxUint32, onTask)
 
 		if fn == nil {
+			//if n == 0 {
 			w.pool.idleCount.Incr()
 			//timer.Reset(Time.Hour)
 			select {

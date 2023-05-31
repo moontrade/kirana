@@ -20,8 +20,8 @@ type Loop[T any] struct {
 	ln       *Listener
 	packet   []byte
 	active   counter.Counter
-	conns    hashmap.Sync[int, *Conn[T]]
-	udpConns hashmap.Sync[int, *Conn[T]]
+	conns    hashmap.SyncMap[int, *Conn[T]]
+	udpConns hashmap.SyncMap[int, *Conn[T]]
 	//conns        map[int]*Conn[T]
 	//udpConns     map[int]*Conn[T]
 	count        int32
@@ -41,8 +41,8 @@ func NewLoop[T any](ln *Listener) (*Loop[T], error) {
 	l := &Loop[T]{
 		poll:     OpenPoll[Conn[T]](),
 		ln:       ln,
-		conns:    *hashmap.NewSync[int, *Conn[T]](0, 128, hashmap.HashInt),
-		udpConns: *hashmap.NewSync[int, *Conn[T]](0, 128, hashmap.HashInt),
+		conns:    *hashmap.NewSyncMap[int, *Conn[T]](0, 128, hashmap.HashInt),
+		udpConns: *hashmap.NewSyncMap[int, *Conn[T]](0, 128, hashmap.HashInt),
 	}
 	return l, nil
 }

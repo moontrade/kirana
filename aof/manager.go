@@ -81,7 +81,7 @@ type Manager struct {
 	closing   int64
 	closed    int64
 	isClosed  bool
-	files     *hashmap.Sync[string, *AOF]
+	files     *hashmap.SyncMap[string, *AOF]
 	gcList    *swap.SyncSlice[*AOF]
 	flushList *swap.SyncSlice[*AOF]
 	mu        spinlock.Mutex
@@ -120,7 +120,7 @@ func NewManager(dir string, writeMode, readMode os.FileMode) (*Manager, error) {
 		dir:       dir,
 		writeMode: writeMode,
 		readMode:  readMode,
-		files:     hashmap.NewSync[string, *AOF](1024, 1024, hashmap.HashString),
+		files:     hashmap.NewSyncMap[string, *AOF](1024, 1024, hashmap.HashString),
 		gcList:    swap.NewSync[*AOF](getGCIndex, setGCIndex),
 		flushList: swap.NewSync[*AOF](getFlushIndex, setFlushIndex),
 	}

@@ -56,7 +56,7 @@ func TestAlloc(t *testing.T) {
 
 	printPoolStats(p8)
 
-	const parallelism = 32
+	const parallelism = 128
 	const iterations = 5000000
 	const sizeClass = 8
 
@@ -255,7 +255,7 @@ func BenchmarkBytesPool_Get(b *testing.B) {
 	var (
 		//min, max    = 36, 8092
 		min, max  = 8, 256
-		maxAllocs = 4
+		maxAllocs = 16
 		//runTLSF     = true
 		//showGCStats = false
 	)

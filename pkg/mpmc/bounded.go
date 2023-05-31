@@ -26,8 +26,8 @@ type Bounded[T any] struct {
 	nodes []node[T]
 	mask  int64
 	_     [CacheLinePad - unsafe.Sizeof(reflect.SliceHeader{}) - 8]byte
-	wake  int64
-	_     [CacheLinePad - 8]byte
+	left  *Bounded[T]
+	right *Bounded[T]
 }
 
 // NewBounded returns the RingBuffer object
@@ -99,31 +99,8 @@ func (b *Bounded[T]) Enqueue(data *T) bool {
 
 	atomic.StorePointer(&cell.data, unsafe.Pointer(data))
 	atomic.StoreInt64(&cell.seq, pos+1)
-
-	//if b.wakeCh != nil && pos-b.head == 1 && b.wake == 0 {
-	//	if atomicx.Casint64(&b.wake, 0, 1) {
-	//		b.wakeCount.Incr()
-	//		select {
-	//		case b.wakeCh <- 1:
-	//		default:
-	//			b.wakeFull.Incr()
-	//		}
-	//	}
-	//}
-
 	return true
 }
-
-//func (b *Bounded[T]) EnqueueUnsafe(data unsafe.Pointer) bool {
-//	for !b.PushUnsafe0(data) {
-//		if b.IsFull() {
-//			return false
-//		} else {
-//			//println("not full!!!")
-//		}
-//	}
-//	return true
-//}
 
 func (b *Bounded[T]) EnqueueUnsafe(data unsafe.Pointer) bool {
 	if data == nil {
@@ -138,11 +115,9 @@ func (b *Bounded[T]) EnqueueUnsafe(data unsafe.Pointer) bool {
 		seq := atomic.LoadInt64(&cell.seq)
 		diff := seq - pos
 		if diff == 0 {
-			//if atomicx.Casint64(&b.tail, pos, pos+1) {
 			if atomic.CompareAndSwapInt64(&b.tail, pos, pos+1) {
 				break
 			}
-			//pos = atomic.LoadInt64(&b.tail)
 		} else if diff < 0 {
 			if b.IsFull() {
 				return false
@@ -152,21 +127,8 @@ func (b *Bounded[T]) EnqueueUnsafe(data unsafe.Pointer) bool {
 			pos = atomic.LoadInt64(&b.tail)
 		}
 	}
-
 	atomic.StorePointer(&cell.data, data)
 	atomic.StoreInt64(&cell.seq, pos+1)
-
-	//if b.wakeCh != nil && pos-b.head == 1 && b.wake == 0 {
-	//	if atomicx.Casint64(&b.wake, 0, 1) {
-	//		b.wakeCount.Incr()
-	//		select {
-	//		case b.wakeCh <- 1:
-	//		default:
-	//			b.wakeFull.Incr()
-	//		}
-	//	}
-	//}
-
 	return true
 }
 
@@ -198,7 +160,6 @@ func (b *Bounded[T]) Dequeue() *T {
 		runtime.Gosched()
 		data = atomic.SwapPointer(&cell.data, nil)
 	}
-
 	atomic.StoreInt64(&cell.seq, pos+b.mask+1)
 	return (*T)(data)
 }
@@ -268,7 +229,6 @@ func (b *Bounded[T]) DequeueDeref() (res T) {
 }
 
 func (b *Bounded[T]) DequeueMany(maxCount int, consumer func(*T)) (count int) {
-	//atomic.StoreInt64(&b.wake, 0)
 	var (
 		cell *node[T]
 		pos  = atomic.LoadInt64(&b.head)
@@ -305,7 +265,6 @@ func (b *Bounded[T]) DequeueMany(maxCount int, consumer func(*T)) (count int) {
 }
 
 func (b *Bounded[T]) DequeueManyUnsafe(maxCount int, consumer func(pointer unsafe.Pointer)) (count int) {
-	//atomic.StoreInt64(&b.wake, 0)
 	var (
 		cell *node[T]
 		pos  = atomic.LoadInt64(&b.head)
@@ -342,7 +301,6 @@ func (b *Bounded[T]) DequeueManyUnsafe(maxCount int, consumer func(pointer unsaf
 }
 
 func (b *Bounded[T]) DequeueManyDeref(maxCount int, consumer func(T)) (count int) {
-	//atomic.StoreInt64(&b.wake, 0)
 	var (
 		cell *node[T]
 		pos  = atomic.LoadInt64(&b.head)

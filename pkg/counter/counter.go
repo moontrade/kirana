@@ -14,26 +14,31 @@ func (c *Counter) Load() int64 {
 }
 
 func (c *Counter) Incr() int64 {
-	return atomicx.Xaddint64((*int64)(c), 1)
+	//return atomicx.Xaddint64((*int64)(c), 1)
+	return atomic.AddInt64((*int64)(c), 1)
 }
 
 func (c *Counter) Decr() int64 {
-	return atomicx.Xaddint64((*int64)(c), -1)
+	//return atomicx.Xaddint64((*int64)(c), -1)
+	return atomic.AddInt64((*int64)(c), -1)
 }
 
 func (c *Counter) Add(count int64) {
-	atomicx.Xaddint64((*int64)(c), count)
+	atomic.AddInt64((*int64)(c), count)
+	//atomicx.Xaddint64((*int64)(c), count)
 }
 
 func (c *Counter) Cas(old, new int64) bool {
-	return atomicx.Casint64((*int64)(c), old, new)
+	return atomic.CompareAndSwapInt64((*int64)(c), old, new)
+	//return atomicx.Casint64((*int64)(c), old, new)
 }
 
 func (c *Counter) Sub(count int64) {
 	if count > 0 {
 		count = -count
 	}
-	atomicx.Xaddint64((*int64)(c), count)
+	atomic.AddInt64((*int64)(c), count)
+	//atomicx.Xaddint64((*int64)(c), count)
 }
 
 func (c *Counter) Store(value int64) {

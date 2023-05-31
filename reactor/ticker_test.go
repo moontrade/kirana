@@ -12,7 +12,7 @@ func TestHFTicker(t *testing.T) {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 
-		tick := time.Millisecond * 20
+		tick := time.Millisecond * 10
 		//tick = time.Millisecond * 500
 		//next := timex.NanoTime() + int64(tick)
 
@@ -21,6 +21,7 @@ func TestHFTicker(t *testing.T) {
 			//time.Sleep(time.Duration(next - begin))
 			//next += int64(tick)
 			park(tick)
+			//time.Sleep(tick)
 			//cgo.NonBlocking((*byte)(cgo2.Sleep), uintptr(tick), 0)
 			//fmt.Println(timex.NanoTime())
 			//end := timex.NanoTime()

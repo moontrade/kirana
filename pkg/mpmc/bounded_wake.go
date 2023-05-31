@@ -1,12 +1,13 @@
 package mpmc
 
 import (
-	"github.com/moontrade/kirana/pkg/atomicx"
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/timex"
 	"reflect"
 	"runtime"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
@@ -116,7 +117,7 @@ func (b *BoundedWake[T]) Enqueue(data *T) bool {
 
 	if b.wakeCh != nil && pos-atomic.LoadInt64(&b.head) == 0 {
 		//if b.wakeCh != nil && atomic.LoadInt64(&b.wake) == 0 {
-		if atomicx.Casint64(&b.wake, 0, 1) {
+		if atomic.CompareAndSwapInt64(&b.wake, 0, 1) {
 			b.wakeCount.Incr()
 			select {
 			case b.wakeCh <- 0:
@@ -127,6 +128,31 @@ func (b *BoundedWake[T]) Enqueue(data *T) bool {
 	}
 
 	return true
+}
+
+func (b *BoundedWake[T]) EnqueueUnsafeTimeout(data unsafe.Pointer, timeout time.Duration) bool {
+	if b.EnqueueUnsafe(data) {
+		return true
+	}
+	var (
+		begin = timex.NanoTime()
+		count = 0
+	)
+	runtime.Gosched()
+	for {
+		if b.EnqueueUnsafe(data) {
+			return true
+		}
+		if timex.NanoTime()-begin >= int64(timeout) {
+			return false
+		}
+		count++
+		if count%10 == 0 {
+			time.Sleep(time.Millisecond)
+		} else {
+			runtime.Gosched()
+		}
+	}
 }
 
 func (b *BoundedWake[T]) EnqueueUnsafe(data unsafe.Pointer) bool {

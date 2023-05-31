@@ -2,11 +2,11 @@ package reactor
 
 import (
 	"errors"
-	"github.com/moontrade/kirana/pkg/atomicx"
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/spinlock"
 	"os"
 	"runtime"
+	"sync/atomic"
 	"time"
 )
 
@@ -250,18 +250,18 @@ func (w *WakeList) init(owner *TaskSet) {
 }
 
 func (w *WakeList) onWake(now int64) int64 {
-	more := atomicx.Loadint64(&w.isWaking)
+	more := atomic.LoadInt64(&w.isWaking)
 	if more == 0 {
 		return 0
 	}
-	atomicx.Xaddint64(&w.isWaking, -more)
+	atomic.AddInt64(&w.isWaking, -more)
 	return more
 	//atomic.StoreInt64(&w.isWaking, 0)
 	//atomic.StoreInt64(&w.lastWake, now)
 }
 
 func (w *WakeList) wake() bool {
-	wakes := atomicx.Xaddint64(&w.isWaking, 1)
+	wakes := atomic.AddInt64(&w.isWaking, 1)
 	if wakes > 1 {
 		return true
 		//runtime.Gosched()

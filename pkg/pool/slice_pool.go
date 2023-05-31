@@ -7,7 +7,7 @@ import (
 	"unsafe"
 )
 
-// SizeClasses are power of 2 up to 64kb
+// SizeClasses are power of 2 up to 1G
 // Pool is unlikely the ideal choice for sizes larger than 8kb. Best use cases
 // are a lot of smallish allocations and frees with high contention.
 type SizeClasses struct {
@@ -35,6 +35,10 @@ type SizeClasses struct {
 	Size16M  SizeClass
 	Size32M  SizeClass
 	Size64M  SizeClass
+	Size128M SizeClass
+	Size256M SizeClass
+	Size512M SizeClass
+	Size1G   SizeClass
 }
 
 // SizeClass configures the maximum number of pages and the size of each page.
@@ -106,52 +110,64 @@ func NewSlices[T any](config *Config[[]T], sizes *SizeClasses) *Slices[T] {
 		pools[10] = newSlicePool[T](1024, config.NumShards, sizes.Size1K)
 	}
 	if sizes.Size2K.IsActive() {
-		pools[11] = newSlicePool[T](2048, config.NumShards, sizes.Size2K)
+		pools[11] = newSlicePool[T](1024*2, config.NumShards, sizes.Size2K)
 	}
 	if sizes.Size4K.IsActive() {
-		pools[12] = newSlicePool[T](4096, config.NumShards, sizes.Size4K)
+		pools[12] = newSlicePool[T](1024*4, config.NumShards, sizes.Size4K)
 	}
 	if sizes.Size8K.IsActive() {
-		pools[13] = newSlicePool[T](8192, config.NumShards, sizes.Size8K)
+		pools[13] = newSlicePool[T](1024*8, config.NumShards, sizes.Size8K)
 	}
 	if sizes.Size16K.IsActive() {
-		pools[14] = newSlicePool[T](16384, config.NumShards, sizes.Size16K)
+		pools[14] = newSlicePool[T](1024*16, config.NumShards, sizes.Size16K)
 	}
 	if sizes.Size32K.IsActive() {
-		pools[15] = newSlicePool[T](32768, config.NumShards, sizes.Size32K)
+		pools[15] = newSlicePool[T](1024*32, config.NumShards, sizes.Size32K)
 	}
 	if sizes.Size64K.IsActive() {
-		pools[16] = newSlicePool[T](65536, config.NumShards, sizes.Size64K)
+		pools[16] = newSlicePool[T](1024*64, config.NumShards, sizes.Size64K)
 	}
 	if sizes.Size128K.IsActive() {
-		pools[17] = newSlicePool[T](65536*2, config.NumShards, sizes.Size128K)
+		pools[17] = newSlicePool[T](1024*128, config.NumShards, sizes.Size128K)
 	}
 	if sizes.Size256K.IsActive() {
-		pools[18] = newSlicePool[T](65536*4, config.NumShards, sizes.Size256K)
+		pools[18] = newSlicePool[T](1024*256, config.NumShards, sizes.Size256K)
 	}
 	if sizes.Size512K.IsActive() {
-		pools[19] = newSlicePool[T](65536*8, config.NumShards, sizes.Size512K)
+		pools[19] = newSlicePool[T](1024*512, config.NumShards, sizes.Size512K)
 	}
 	if sizes.Size1M.IsActive() {
-		pools[20] = newSlicePool[T](65536*16, config.NumShards, sizes.Size1M)
+		pools[20] = newSlicePool[T](1024*1024, config.NumShards, sizes.Size1M)
 	}
 	if sizes.Size2M.IsActive() {
-		pools[21] = newSlicePool[T](65536*32, config.NumShards, sizes.Size2M)
+		pools[21] = newSlicePool[T](1024*1024*2, config.NumShards, sizes.Size2M)
 	}
 	if sizes.Size4M.IsActive() {
-		pools[22] = newSlicePool[T](65536*64, config.NumShards, sizes.Size4M)
+		pools[22] = newSlicePool[T](1024*1024*4, config.NumShards, sizes.Size4M)
 	}
 	if sizes.Size8M.IsActive() {
-		pools[23] = newSlicePool[T](65536*128, config.NumShards, sizes.Size8M)
+		pools[23] = newSlicePool[T](1024*1024*8, config.NumShards, sizes.Size8M)
 	}
 	if sizes.Size16M.IsActive() {
-		pools[24] = newSlicePool[T](65536*256, config.NumShards, sizes.Size16M)
+		pools[24] = newSlicePool[T](1024*1024*16, config.NumShards, sizes.Size16M)
 	}
 	if sizes.Size32M.IsActive() {
-		pools[25] = newSlicePool[T](65536*512, config.NumShards, sizes.Size32M)
+		pools[25] = newSlicePool[T](1024*1024*32, config.NumShards, sizes.Size32M)
 	}
 	if sizes.Size64M.IsActive() {
-		pools[26] = newSlicePool[T](65536*1024, config.NumShards, sizes.Size64M)
+		pools[26] = newSlicePool[T](1024*1024*64, config.NumShards, sizes.Size64M)
+	}
+	if sizes.Size128M.IsActive() {
+		pools[27] = newSlicePool[T](1024*1024*128, config.NumShards, sizes.Size128M)
+	}
+	if sizes.Size128M.IsActive() {
+		pools[28] = newSlicePool[T](1024*1024*256, config.NumShards, sizes.Size256M)
+	}
+	if sizes.Size512M.IsActive() {
+		pools[29] = newSlicePool[T](1024*1024*512, config.NumShards, sizes.Size512M)
+	}
+	if sizes.Size1G.IsActive() {
+		pools[30] = newSlicePool[T](1024*1024*1024, config.NumShards, sizes.Size1G)
 	}
 	return &Slices[T]{
 		pools:   pools,

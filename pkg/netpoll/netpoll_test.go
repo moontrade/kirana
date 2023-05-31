@@ -60,7 +60,9 @@ func BenchmarkWake(b *testing.B) {
 		c.Incr()
 	}
 
-	queue := mpmc.NewBoundedWake[func()](int64(b.N)*2, nil)
+	ch := make(chan int64, 1)
+
+	queue := mpmc.NewBoundedWake[func()](int64(b.N)*2, ch)
 
 	flushTasks := func(fn *func()) {
 		(*fn)()
@@ -86,6 +88,22 @@ func BenchmarkWake(b *testing.B) {
 	}
 
 	go func() {
+		for {
+			select {
+			case v, ok := <-ch:
+				fmt.Println("woke")
+				if !ok {
+					return
+				}
+				_ = v
+				if err := poll.Wake(); err != nil {
+					b.Fatal(err)
+				}
+			}
+		}
+	}()
+
+	go func() {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		//queue.DequeueMany(math.MaxUint32, func(fn *func()) bool {
@@ -93,21 +111,21 @@ func BenchmarkWake(b *testing.B) {
 		//	return true
 		//})
 
-		err := poll.Wait(time.Second, onEvent, onLoop)
-		panic(err)
+		err := poll.Wait(time.Hour, onEvent, onLoop)
+		if err != nil {
+			b.Fatal(err)
+		}
+		//panic(err)
 	}()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		queue.Enqueue(&fn)
-		_ = poll.Wake()
-		if i%1000000 == 0 {
-			//_ = poll.Wake()
-		}
+		//_ = poll.Wake()
 	}
 
-	_ = poll.Wake()
+	//_ = poll.Wake()
 
 	for c.Load() <= int64(b.N-1) {
 		runtime.Gosched()

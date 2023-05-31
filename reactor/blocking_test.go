@@ -6,7 +6,7 @@ import (
 	"github.com/moontrade/kirana/pkg/runtimex"
 	"github.com/moontrade/kirana/pkg/timex"
 	logger "github.com/moontrade/log"
-	"github.com/panjf2000/ants"
+	"github.com/panjf2000/ants/v2"
 	"reflect"
 	"runtime"
 	"sync"
@@ -56,7 +56,7 @@ func TestBlockingPool(t *testing.T) {
 	bp := NewBlockingPool(2, 1024)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	bp.Invoke(func() {
+	bp.Enqueue(func() {
 		defer wg.Done()
 		logger.Warn("invoked")
 	})
@@ -65,7 +65,7 @@ func TestBlockingPool(t *testing.T) {
 
 func TestBlockingConcurrent(t *testing.T) {
 	//bp := blocking
-	bp := NewBlockingPool(5000, 1000000)
+	bp := NewBlockingPool(32, 1024*64)
 
 	wg := new(sync.WaitGroup)
 	numThreads := runtime.GOMAXPROCS(0) * 2
@@ -87,7 +87,7 @@ func TestBlockingConcurrent(t *testing.T) {
 
 			for x := 0; x < iterations; x++ {
 				dispatched.Incr()
-				if !bp.Invoke(fn) {
+				if !bp.Enqueue(fn) {
 					c.Incr()
 					overflowCount.Incr()
 				}
@@ -99,7 +99,7 @@ func TestBlockingConcurrent(t *testing.T) {
 
 	for x := 0; x < iterations; x++ {
 		dispatched.Incr()
-		if !bp.Invoke(fn) {
+		if !bp.Enqueue(fn) {
 			c.Incr()
 			overflowCount.Incr()
 		}
@@ -118,22 +118,19 @@ func BenchmarkBlockingPool(b *testing.B) {
 	//bp := blocking
 
 	const parallelism = 64
+	const maxWorkers = 8192
 
-	b.Run("Kirana", func(b *testing.B) {
-		bp := NewBlockingPool(4, 1024*1024)
+	fmt.Println("MAX PROCS", runtime.GOMAXPROCS(0))
+
+	b.Run("kirana - Sleep 1ms", func(b *testing.B) {
+		wg := &sync.WaitGroup{}
+		bp := NewBlockingPool(maxWorkers, 256)
 
 		c := new(counter.Counter)
 		errs := new(counter.Counter)
 		fn := func() {
-			c.Incr()
-		}
-		for i := 0; i < b.N; i++ {
-			bp.Invoke(fn)
-		}
-
-		for c.Load() < int64(b.N-1) {
-			runtime.Gosched()
-			//fmt.Println(c.Load(), b.N-1)
+			time.Sleep(time.Millisecond)
+			wg.Done()
 		}
 
 		c.Store(0)
@@ -144,7 +141,46 @@ func BenchmarkBlockingPool(b *testing.B) {
 
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				if !bp.Invoke(fn) {
+				wg.Add(1)
+				if !bp.Enqueue(fn) {
+					wg.Done()
+					c.Incr()
+					errs.Incr()
+				}
+			}
+		})
+
+		wg.Wait()
+		b.StopTimer()
+
+		fmt.Println("Kirana Errors", errs.Load())
+	})
+
+	b.Run("ants - Sleep 1ms", func(b *testing.B) {
+		wg := &sync.WaitGroup{}
+		c := new(counter.Counter)
+		errs := new(counter.Counter)
+		fn := func() {
+			time.Sleep(time.Millisecond)
+			wg.Done()
+		}
+
+		wp, err := ants.NewPool(maxWorkers)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		c.Store(0)
+		b.SetParallelism(parallelism)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				wg.Add(1)
+				if wp.Submit(fn) != nil {
+					wg.Done()
 					c.Incr()
 					errs.Incr()
 				}
@@ -162,21 +198,169 @@ func BenchmarkBlockingPool(b *testing.B) {
 		//	}
 		//}
 
-		for c.Load() < int64(b.N-1) {
-			runtime.Gosched()
-			//fmt.Println(c.Load(), b.N-1)
+		wg.Wait()
+
+		//for c.Load() < int64(b.N-1) {
+		//	runtime.Gosched()
+		//	//fmt.Println(c.Load(), b.N-1)
+		//}
+
+		b.StopTimer()
+
+		fmt.Println("Ants Errors", errs.Load())
+	})
+
+	b.Run("kirana - Sleep 50ms", func(b *testing.B) {
+		wg := &sync.WaitGroup{}
+		bp := NewBlockingPool(maxWorkers, 256)
+
+		c := new(counter.Counter)
+		errs := new(counter.Counter)
+		fn := func() {
+			time.Sleep(time.Millisecond * 50)
+			wg.Done()
 		}
+
+		c.Store(0)
+		b.SetParallelism(parallelism)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				wg.Add(1)
+				if !bp.Enqueue(fn) {
+					wg.Done()
+					c.Incr()
+					errs.Incr()
+				}
+			}
+		})
+
+		wg.Wait()
+		b.StopTimer()
+
+		fmt.Println("Kirana Errors", errs.Load())
+	})
+
+	b.Run("ants - Sleep 50ms", func(b *testing.B) {
+		wg := &sync.WaitGroup{}
+		c := new(counter.Counter)
+		errs := new(counter.Counter)
+		fn := func() {
+			time.Sleep(time.Millisecond * 50)
+			wg.Done()
+		}
+
+		wp, err := ants.NewPool(maxWorkers)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		c.Store(0)
+		b.SetParallelism(parallelism)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				wg.Add(1)
+				if wp.Submit(fn) != nil {
+					wg.Done()
+					c.Incr()
+					errs.Incr()
+				}
+			}
+		})
+
+		//for i := 0; i < b.N; i++ {
+		//	if !bp.Invoke(fn) {
+		//		c.Incr()
+		//		panic("could not invoke")
+		//		//runtime.Gosched()
+		//		//for !bp.Invoke(fn) {
+		//		//	runtime.Gosched()
+		//		//}
+		//	}
+		//}
+
+		wg.Wait()
+
+		//for c.Load() < int64(b.N-1) {
+		//	runtime.Gosched()
+		//	//fmt.Println(c.Load(), b.N-1)
+		//}
+
+		b.StopTimer()
+
+		fmt.Println("Ants Errors", errs.Load())
+	})
+
+	b.Run("kirana - no sleep", func(b *testing.B) {
+		wg := &sync.WaitGroup{}
+		bp := NewBlockingPool(runtime.GOMAXPROCS(0)*512, 256)
+
+		c := new(counter.Counter)
+		errs := new(counter.Counter)
+		fn := func() {
+			wg.Done()
+		}
+		//for i := 0; i < b.N; i++ {
+		//	bp.Invoke(fn)
+		//}
+		//
+		//for c.Load() < int64(b.N-1) {
+		//	runtime.Gosched()
+		//	//fmt.Println(c.Load(), b.N-1)
+		//}
+
+		c.Store(0)
+		b.SetParallelism(parallelism)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				wg.Add(1)
+				if !bp.Enqueue(fn) {
+					wg.Done()
+					c.Incr()
+					errs.Incr()
+				}
+			}
+		})
+
+		//for i := 0; i < b.N; i++ {
+		//	if !bp.Invoke(fn) {
+		//		c.Incr()
+		//		panic("could not invoke")
+		//		//runtime.Gosched()
+		//		//for !bp.Invoke(fn) {
+		//		//	runtime.Gosched()
+		//		//}
+		//	}
+		//}
+
+		wg.Wait()
+		//for c.Load()+errs.Load() < int64(b.N-1) {
+		//	runtime.Gosched()
+		//	//fmt.Println(c.Load(), b.N-1)
+		//}
 
 		b.StopTimer()
 
 		fmt.Println("Kirana Errors", errs.Load())
 	})
 
-	b.Run("ants", func(b *testing.B) {
+	b.Run("ants - no sleep", func(b *testing.B) {
+		wg := &sync.WaitGroup{}
 		c := new(counter.Counter)
 		errs := new(counter.Counter)
 		fn := func() {
-			c.Incr()
+			wg.Done()
 		}
 
 		c.Store(0)
@@ -187,7 +371,9 @@ func BenchmarkBlockingPool(b *testing.B) {
 
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
+				wg.Add(1)
 				if ants.Submit(fn) != nil {
+					wg.Done()
 					c.Incr()
 					errs.Incr()
 				}
@@ -205,15 +391,54 @@ func BenchmarkBlockingPool(b *testing.B) {
 		//	}
 		//}
 
-		for c.Load() < int64(b.N-1) {
-			runtime.Gosched()
-			//fmt.Println(c.Load(), b.N-1)
-		}
+		wg.Wait()
+
+		//for c.Load() < int64(b.N-1) {
+		//	runtime.Gosched()
+		//	//fmt.Println(c.Load(), b.N-1)
+		//}
 
 		b.StopTimer()
 
 		fmt.Println("Ants Errors", errs.Load())
 	})
+
+	//b.Run("ultrapool", func(b *testing.B) {
+	//	wg := &sync.WaitGroup{}
+	//	c := new(counter.Counter)
+	//	errs := new(counter.Counter)
+	//	fn := func() {
+	//		time.Sleep(time.Millisecond)
+	//		wg.Done()
+	//	}
+	//
+	//	wp := ultrapool.NewWorkerPool[func()](func(task func()) {
+	//		task()
+	//	})
+	//
+	//	c.Store(0)
+	//	b.SetParallelism(parallelism)
+	//
+	//	b.ReportAllocs()
+	//	b.ResetTimer()
+	//
+	//	b.RunParallel(func(pb *testing.PB) {
+	//		for pb.Next() {
+	//			wg.Add(1)
+	//			if wp.AddTask(fn) != nil {
+	//				wg.Done()
+	//				time.Sleep(time.Millisecond)
+	//				c.Incr()
+	//				errs.Incr()
+	//			}
+	//		}
+	//	})
+	//
+	//	wg.Wait()
+	//	b.StopTimer()
+	//
+	//	fmt.Println("Ultrapool Errors", errs.Load())
+	//})
 
 	//fmt.Println("workers", len(bp.workers), " wakes", bp.workers[0].WakeCount(), " wake chan full count", bp.queue.WakeChanFullCount())
 }

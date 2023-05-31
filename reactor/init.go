@@ -3,7 +3,8 @@ package reactor
 import (
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/cow"
-	"github.com/moontrade/kirana/pkg/gid"
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/runtimex"
 	"runtime"
 	"strconv"
 	"sync"
@@ -18,6 +19,7 @@ var (
 	blocking  *BlockingPool
 	reactors  cow.Slice[*Reactor]
 	loops     cow.Slice[*Reactor]
+	loopsMask = 0
 	mu        sync.Mutex
 )
 
@@ -39,13 +41,7 @@ func NumReactors() int { return reactors.Len() }
 
 func NextEventLoop() *Reactor {
 	loops := loops.Snapshot()
-	if len(loops) == 0 {
-		return nil
-	}
-	if len(loops) == 1 {
-		return loops[0]
-	}
-	return loops[int(gid.PID())%len(loops)]
+	return loops[int(runtimex.ProcessorID())&loopsMask]
 }
 
 func Init(
@@ -60,6 +56,8 @@ func Init(
 	if numLoops == 0 {
 		numLoops = runtime.GOMAXPROCS(0)
 	}
+	numLoops = pmath.CeilToPowerOf2(numLoops)
+	loopsMask = numLoops - 1
 	if queueSize < 1024 {
 		queueSize = 1024
 	}
