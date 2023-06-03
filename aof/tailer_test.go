@@ -8,19 +8,20 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
 func init() {
-	reactor.Init(1, reactor.Millis250, 8192*8, 8192)
+	reactor.Init(0, reactor.Millis250, 8192*8, 8192)
 }
 
 var timer int64
 
 func TestTailer(t *testing.T) {
-	//debug.SetMemoryLimit(1024 * 1024 * 1024 * 4)
+	debug.SetMemoryLimit(1024 * 1024 * 128)
 
 	//runtime.LockOSThread()
 
@@ -32,6 +33,7 @@ func TestTailer(t *testing.T) {
 	buf := []byte{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5'}
 
 	for x := 0; x < 32; x++ {
+		time.Sleep(time.Millisecond * 100)
 		name := fmt.Sprintf("db-%d.txt", x)
 		os.Remove("testdata/" + name)
 

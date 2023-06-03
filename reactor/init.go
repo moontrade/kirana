@@ -74,7 +74,7 @@ func Init(
 			InvokeQSize:  queueSize,
 			WakeQSize:    queueSize,
 			SpawnQSize:   queueSize,
-			LockOSThread: true,
+			LockOSThread: false,
 		})
 		if err != nil {
 			panic(err)

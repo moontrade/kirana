@@ -89,6 +89,9 @@ func (tl *TaskSet) Stop() int64 {
 func (tl *TaskSet) Wake() error {
 	slots := tl.slots.slots
 	for i := 0; i < len(slots); i++ {
+		if slots[i] == nil {
+			continue
+		}
 		for !slots[i].wake() {
 			runtime.Gosched()
 		}
@@ -261,6 +264,9 @@ func (w *WakeList) onWake(now int64) int64 {
 }
 
 func (w *WakeList) wake() bool {
+	if w == nil {
+		return false
+	}
 	wakes := atomic.AddInt64(&w.isWaking, 1)
 	if wakes > 1 {
 		return true

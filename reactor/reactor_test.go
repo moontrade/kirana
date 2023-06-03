@@ -14,7 +14,7 @@ import (
 var Started = timex.NanoTime()
 
 func BenchmarkInvoke(b *testing.B) {
-	w, err := NewReactor(Config{Level1Wheel: NewWheel(Millis250), InvokeQSize: 10000000, LockOSThread: true})
+	w, err := NewReactor(Config{Level1Wheel: NewWheel(Millis250), InvokeQSize: 10000000, LockOSThread: false})
 	if err != nil {
 		b.Fatal(err)
 	}

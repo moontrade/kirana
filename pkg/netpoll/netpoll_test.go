@@ -91,7 +91,7 @@ func BenchmarkWake(b *testing.B) {
 		for {
 			select {
 			case v, ok := <-ch:
-				fmt.Println("woke")
+				//fmt.Println("woke")
 				if !ok {
 					return
 				}
