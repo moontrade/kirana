@@ -97,12 +97,12 @@ func (tl *TaskSet) Wake() error {
 }
 
 func (tl *TaskSet) Spawn(future FutureTask) (*Task, error) {
-	return tl.SpawnOn(NextEventLoop(), future)
+	return tl.SpawnOn(NextReactor(), future)
 }
 
 func (tl *TaskSet) SpawnOn(reactor *Reactor, future FutureTask) (*Task, error) {
 	if reactor == nil {
-		return nil, errors.New("no event loops")
+		return nil, errors.New("no event reactors")
 	}
 	if future == nil {
 		return nil, errors.New("nil future")
@@ -126,7 +126,7 @@ func (tl *TaskSet) SpawnInterval(
 	future FutureTask,
 	interval time.Duration,
 ) (*Task, error) {
-	return tl.SpawnIntervalOn(NextEventLoop(), future, interval)
+	return tl.SpawnIntervalOn(NextReactor(), future, interval)
 }
 
 func (tl *TaskSet) SpawnIntervalOn(
@@ -135,7 +135,7 @@ func (tl *TaskSet) SpawnIntervalOn(
 	interval time.Duration,
 ) (*Task, error) {
 	if reactor == nil {
-		return nil, errors.New("no event loops")
+		return nil, errors.New("no event reactors")
 	}
 	if future == nil {
 		return nil, errors.New("nil future")
@@ -196,7 +196,7 @@ func (tl *TaskSet) AddFunc(r *Reactor, value func()) (*FuncSlot, error) {
 		return nil, errors.New("nil task")
 	}
 	if r == nil {
-		r = NextEventLoop()
+		r = NextReactor()
 	}
 	reactorID := r.ID()
 	tl.mu.Lock()

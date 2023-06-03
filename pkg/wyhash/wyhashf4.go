@@ -15,39 +15,6 @@ const (
 	s4              uint64 = 0x1d8e4e27c47d124f
 )
 
-var (
-	r = Rand{}
-)
-
-func SetSeed(s uint64) {
-	r.seed = s
-}
-func Next() uint64 {
-	return r.Next()
-}
-func NextFloat() float64 {
-	return r.NextFloat()
-}
-func NextGaussian() float64 {
-	return r.NextGaussian()
-}
-
-type Rand struct {
-	seed uint64
-}
-
-func (r *Rand) Next() uint64 {
-	return wyrand(&r.seed)
-}
-
-func (r *Rand) NextFloat() float64 {
-	return wy2u01(wyrand(&r.seed))
-}
-
-func (r *Rand) NextGaussian() float64 {
-	return wy2gau(wyrand(&r.seed))
-}
-
 func wyrand(seed *uint64) uint64 {
 	*seed += uint64(0xa0761d6478bd642f)
 	return wymix(*seed, *seed^0xe7037ed1a0b428db)

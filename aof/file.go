@@ -45,7 +45,6 @@ func (s *FileState) store(value FileState) {
 
 func (s *FileState) xchg(value FileState) FileState {
 	return FileState(atomic.SwapInt32((*int32)(s), int32(value)))
-	//return FileState(atomicx.Xchgint32((*int32)(s), int32(value)))
 }
 
 func (s *FileState) cas(old, new FileState) bool {

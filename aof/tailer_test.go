@@ -31,7 +31,7 @@ func TestTailer(t *testing.T) {
 
 	buf := []byte{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5'}
 
-	for x := 0; x < 3; x++ {
+	for x := 0; x < 32; x++ {
 		name := fmt.Sprintf("db-%d.txt", x)
 		os.Remove("testdata/" + name)
 

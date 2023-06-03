@@ -11,16 +11,13 @@ import (
 	"time"
 )
 
-var ()
-
 var (
-	idCounter counter.Counter
-	ticker    *Ticker
-	blocking  *BlockingPool
-	reactors  cow.Slice[*Reactor]
-	loops     cow.Slice[*Reactor]
-	loopsMask = 0
-	mu        sync.Mutex
+	idCounter    counter.Counter
+	ticker       *Ticker
+	blocking     *BlockingPool
+	reactors     cow.Slice[*Reactor]
+	reactorsMask = uint32(0)
+	mu           sync.Mutex
 )
 
 func init() {
@@ -39,9 +36,9 @@ func initTicker(tickDur time.Duration) *Ticker {
 
 func NumReactors() int { return reactors.Len() }
 
-func NextEventLoop() *Reactor {
-	loops := loops.Snapshot()
-	return loops[int(runtimex.ProcessorID())&loopsMask]
+func NextReactor() *Reactor {
+	loops := reactors.Snapshot()
+	return loops[runtimex.Fastrand()&reactorsMask]
 }
 
 func Init(
@@ -50,19 +47,19 @@ func Init(
 	queueSize int,
 	blockingQueueSize int,
 ) {
-	if loops.Len() > 0 {
+	if reactors.Len() > 0 {
 		return
 	}
 	if numLoops == 0 {
 		numLoops = runtime.GOMAXPROCS(0)
 	}
 	numLoops = pmath.CeilToPowerOf2(numLoops)
-	loopsMask = numLoops - 1
+	reactorsMask = uint32(numLoops - 1)
 	if queueSize < 1024 {
 		queueSize = 1024
 	}
-	if blockingQueueSize < 1024 {
-		blockingQueueSize = 1024
+	if blockingQueueSize < 64 {
+		blockingQueueSize = 64
 	}
 	blocking = NewBlockingPool(0, blockingQueueSize)
 	ticker = StartTicker(tick.Tick())
@@ -85,5 +82,5 @@ func Init(
 		l[i] = loop
 		loop.Start()
 	}
-	loops.ReplaceWith(l)
+	reactors.ReplaceWith(l)
 }
