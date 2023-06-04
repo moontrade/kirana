@@ -3,11 +3,12 @@ package wyhash
 import (
 	crand "crypto/rand"
 	"encoding/binary"
-	"github.com/moontrade/kirana/pkg/pmath"
-	"github.com/moontrade/kirana/pkg/runtimex"
 	"runtime"
 	"sync/atomic"
 	"time"
+
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/runtimex"
 )
 
 var (
@@ -42,7 +43,7 @@ func cryptoU64() (uint64, error) {
 }
 
 func Next() uint64 {
-	return randShards[runtimex.ProcID()&randShardsMask].Next()
+	return randShards[uint64(runtimex.ProcID())&randShardsMask].Next()
 }
 
 func NextFloat() float64 {

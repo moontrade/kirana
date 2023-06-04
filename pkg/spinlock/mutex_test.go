@@ -202,40 +202,40 @@ func BenchmarkSpinLock_Lock(b *testing.B) {
 		}
 		wg.Wait()
 	})
-	b.Run("Spinlock 64 threads", func(b *testing.B) {
-		var (
-			l  = new(Mutex)
-			wg = new(sync.WaitGroup)
-		)
-		for i := 0; i < 64; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for i := 0; i < b.N; i++ {
-					l.Lock()
-					l.Unlock()
-				}
-			}()
-		}
-		wg.Wait()
-	})
-	b.Run("Spinlock 128 threads", func(b *testing.B) {
-		var (
-			l  = new(Mutex)
-			wg = new(sync.WaitGroup)
-		)
-		for i := 0; i < 128; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for i := 0; i < b.N; i++ {
-					l.Lock()
-					l.Unlock()
-				}
-			}()
-		}
-		wg.Wait()
-	})
+	//b.Run("Spinlock 64 threads", func(b *testing.B) {
+	//	var (
+	//		l  = new(Mutex)
+	//		wg = new(sync.WaitGroup)
+	//	)
+	//	for i := 0; i < 64; i++ {
+	//		wg.Add(1)
+	//		go func() {
+	//			defer wg.Done()
+	//			for i := 0; i < b.N; i++ {
+	//				l.Lock()
+	//				l.Unlock()
+	//			}
+	//		}()
+	//	}
+	//	wg.Wait()
+	//})
+	//b.Run("Spinlock 128 threads", func(b *testing.B) {
+	//	var (
+	//		l  = new(Mutex)
+	//		wg = new(sync.WaitGroup)
+	//	)
+	//	for i := 0; i < 128; i++ {
+	//		wg.Add(1)
+	//		go func() {
+	//			defer wg.Done()
+	//			for i := 0; i < b.N; i++ {
+	//				l.Lock()
+	//				l.Unlock()
+	//			}
+	//		}()
+	//	}
+	//	wg.Wait()
+	//})
 
 	if rw {
 		b.Run("RWSpinlock 1 thread", func(b *testing.B) {

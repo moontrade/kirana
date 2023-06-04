@@ -1,14 +1,15 @@
 package reactor
 
 import (
-	"github.com/moontrade/kirana/pkg/counter"
-	"github.com/moontrade/kirana/pkg/cow"
-	"github.com/moontrade/kirana/pkg/pmath"
-	"github.com/moontrade/kirana/pkg/runtimex"
 	"runtime"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/moontrade/kirana/pkg/counter"
+	"github.com/moontrade/kirana/pkg/cow"
+	"github.com/moontrade/kirana/pkg/pmath"
+	"github.com/moontrade/kirana/pkg/runtimex"
 )
 
 var (
@@ -74,7 +75,7 @@ func Init(
 			InvokeQSize:  queueSize,
 			WakeQSize:    queueSize,
 			SpawnQSize:   queueSize,
-			LockOSThread: false,
+			LockOSThread: true,
 		})
 		if err != nil {
 			panic(err)

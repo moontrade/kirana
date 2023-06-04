@@ -2,6 +2,10 @@ package reactor
 
 import (
 	"context"
+	"runtime"
+	"sync"
+	"time"
+
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/fastrand"
 	"github.com/moontrade/kirana/pkg/mpmc"
@@ -10,9 +14,6 @@ import (
 	"github.com/moontrade/kirana/pkg/timex"
 	"github.com/moontrade/kirana/pkg/util"
 	logger "github.com/moontrade/log"
-	"runtime"
-	"sync"
-	"time"
 )
 
 func EnqueueBlocking(task func()) bool {
@@ -26,7 +27,7 @@ func EnqueueBlocking(task func()) bool {
 type BlockingPool struct {
 	started     int64
 	workers     []*blockingWorker
-	workersMask int32
+	workersMask uint32
 	idleCount   counter.Counter
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -54,7 +55,7 @@ func NewBlockingPool(numWorkers, queueSize int) *BlockingPool {
 		started:     timex.NanoTime(),
 		workers:     workers,
 		profile:     false,
-		workersMask: int32(numWorkers - 1),
+		workersMask: uint32(numWorkers - 1),
 	}
 	bp.ctx, bp.cancel = context.WithCancel(context.Background())
 	bp.wg.Add(len(workers))
@@ -88,34 +89,75 @@ func (b *BlockingPool) Close() error {
 	return nil
 }
 
+const (
+	maxBackoff            = 16
+	DefaultEnqueueTimeout = time.Second * 10
+)
+
 func (b *BlockingPool) Enqueue(fn func()) bool {
+	return b.EnqueueTimeout(fn, DefaultEnqueueTimeout)
+}
+
+func (b *BlockingPool) EnqueueTimeout(fn func(), timeout time.Duration) bool {
 	var (
-		idx    = fastrand.Uint32n(uint32(len(b.workers)))
-		worker = b.workers[idx]
-		count  = 0
+		idx    = fastrand.Uint32()
+		worker = b.workers[idx&b.workersMask]
 		fnp    = runtimex.FuncToPointer(fn)
 	)
 
-	for !worker.queue.EnqueueUnsafe(fnp) {
-		if count%len(b.workers) == 0 {
-			runtime.Gosched()
-		}
-		idx++
-		count++
-		if idx >= uint32(len(b.workers)) {
-			idx = 0
-		}
-		worker = b.workers[idx]
+	// Try to enqueue on first worker
+	if worker.queue.EnqueueUnsafe(fnp) {
+		return true
 	}
 
-	//worker := b.workers[gid.ProcessorID()&b.workersMask]
-	//if !worker.queue.EnqueueUnsafeTimeout(runtimex.FuncToPointer(fn), time.Second*10) {
-	//	//if !worker.queue.EnqueueUnsafe(runtimex.FuncToPointer(fn)) {
-	//	b.done.Incr()
-	//	b.err.Incr()
-	//	return false
-	//}
-	return true
+	// Find an available worker
+	count := 1
+	for {
+		idx++
+		worker = b.workers[idx&b.workersMask]
+
+		if worker.queue.EnqueueUnsafe(fnp) {
+			return true
+		}
+
+		count++
+		if count >= len(b.workers) {
+			break
+		}
+	}
+
+	// All workers are busy and have full queues.
+	// Exponential backoff after each full loop through the workers.
+	var (
+		start   = timex.NanoTime()
+		backoff = 1
+	)
+
+	// Yield
+	runtime.Gosched()
+
+	for {
+		idx++
+		worker = b.workers[idx&b.workersMask]
+		if worker.queue.EnqueueUnsafe(fnp) {
+			return true
+		}
+
+		count++
+		if count%len(b.workers) == 0 {
+			// Timed out?
+			if time.Duration(timex.NanoTime()-start) >= timeout {
+				return false
+			}
+			// Exponential backoff yield
+			for i := 0; i < backoff; i++ {
+				runtime.Gosched()
+			}
+			if backoff < maxBackoff {
+				backoff <<= 1
+			}
+		}
+	}
 }
 
 type blockingWorker struct {

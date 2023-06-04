@@ -2,15 +2,16 @@ package pool
 
 import (
 	"fmt"
+	"reflect"
+	"sync"
+	"testing"
+	"unsafe"
+
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/fastrand"
 	"github.com/moontrade/kirana/pkg/pmath"
 	"github.com/moontrade/kirana/pkg/syncx"
 	"github.com/moontrade/kirana/pkg/util"
-	"reflect"
-	"sync"
-	"testing"
-	"unsafe"
 )
 
 func TestBytesPool_AllocRC(t *testing.T) {
@@ -35,14 +36,13 @@ func TestBytesPool_AllocRC(t *testing.T) {
 	//t.Logf("%d", bits.TrailingZeros64(uint64(pmath.CeilToPowerOf2(1))))
 }
 
-func printPoolStats(p *Pool[[]byte]) {
-	fmt.Println("allocs", p.Allocs.Load())
-	fmt.Println("allocs2", p.Allocs2.Load())
-	fmt.Println("deallocs", p.Deallocs.Load())
-	fmt.Println("pageAllocs", p.PageAllocs.Load())
-	fmt.Println("pageAllocAttempts", p.PageAllocAttempts.Load())
-	fmt.Println("count", p.Len())
-	fmt.Println()
+func printPoolStats(t *testing.T, p *Pool[[]byte]) {
+	t.Log("allocs", p.Allocs.Load())
+	t.Log("allocs2", p.Allocs2.Load())
+	t.Log("deallocs", p.Deallocs.Load())
+	t.Log("pageAllocs", p.PageAllocs.Load())
+	t.Log("pageAllocAttempts", p.PageAllocAttempts.Load())
+	t.Log("count", p.Len())
 }
 
 func TestAlloc(t *testing.T) {
@@ -51,10 +51,10 @@ func TestAlloc(t *testing.T) {
 	_ = pop
 	defer func() {
 		fmt.Println(pop.Len())
-		printPoolStats(p8)
+		printPoolStats(t, p8)
 	}()
 
-	printPoolStats(p8)
+	printPoolStats(t, p8)
 
 	const parallelism = 128
 	const iterations = 5000000

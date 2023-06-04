@@ -17,6 +17,7 @@ const maxBackoff = 16
 // Lock locks the SpinLock.
 func (sl *Mutex) Lock() {
 	backoff := 1
+	//for !atomicx.Cas((*uint32)(sl), 0, 1) {
 	for !atomic.CompareAndSwapUint32((*uint32)(sl), 0, 1) {
 		// Leverage the exponential backoff algorithm, see https://en.wikipedia.org/wiki/Exponential_backoff.
 		for i := 0; i < backoff; i++ {

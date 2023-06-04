@@ -3,8 +3,6 @@ package aof
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/moontrade/kirana/pkg/timex"
-	"github.com/moontrade/kirana/reactor"
 	"math"
 	"os"
 	"runtime"
@@ -12,10 +10,13 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/moontrade/kirana/pkg/timex"
+	"github.com/moontrade/kirana/reactor"
 )
 
 func init() {
-	reactor.Init(0, reactor.Millis250, 8192*8, 8192)
+	reactor.Init(1, reactor.Millis500, 8192*8, 64)
 }
 
 var timer int64
@@ -32,8 +33,8 @@ func TestTailer(t *testing.T) {
 
 	buf := []byte{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5'}
 
-	for x := 0; x < 32; x++ {
-		time.Sleep(time.Millisecond * 100)
+	for x := 0; x < 64; x++ {
+		// time.Sleep(time.Millisecond * 100)
 		name := fmt.Sprintf("db-%d.txt", x)
 		os.Remove("testdata/" + name)
 

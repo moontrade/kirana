@@ -6,8 +6,9 @@ package threadx
 #include <pthread.h>
 
 void kirana_get_thread_id(uint64_t thread_id, uint64_t b) {
-	//pthread_threadid_np(NULL, (uint64_t*)(void*)thread_id);
-*(uint64_t*)(void*)thread_id = (uint64_t)gettid();
+	*(uint64_t*)(void*)thread_id = (uint64_t)pthread_self();
+	//pthread_getthreadid_np(NULL, (uint64_t*)(void*)thread_id);
+	//*(uint64_t*)(void*)thread_id = (uint64_t)gettid();
 }
 */
 import "C"

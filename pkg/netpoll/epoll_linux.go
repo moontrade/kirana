@@ -5,11 +5,12 @@
 package netpoll
 
 import (
-	"golang.org/x/sys/unix"
 	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 // Poll ...
@@ -93,9 +94,9 @@ func epollWait(epfd int, events []epollevent, msec int) (int, error) {
 		errno unix.Errno
 	)
 	if msec == 0 { // non-block system call, use RawSyscall6 to avoid getting preempted by runtime
-		np, _, errno = unix.RawSyscall6(unix.SYS_EPOLL_WAIT, uintptr(epfd), uintptr(ep), uintptr(len(events)), 0, 0, 0)
+		np, _, errno = syscall.RawSyscall6(syscall.SYS_EPOLL_PWAIT, uintptr(epfd), uintptr(ep), uintptr(len(events)), 0, 0, 0)
 	} else {
-		np, _, errno = unix.Syscall6(unix.SYS_EPOLL_WAIT, uintptr(epfd), uintptr(ep), uintptr(len(events)), uintptr(msec), 0, 0)
+		np, _, errno = syscall.Syscall6(syscall.SYS_EPOLL_PWAIT, uintptr(epfd), uintptr(ep), uintptr(len(events)), uintptr(msec), 0, 0)
 	}
 	if errno != 0 {
 		return int(np), errnoErr(errno)
