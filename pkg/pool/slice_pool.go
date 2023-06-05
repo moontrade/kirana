@@ -214,6 +214,7 @@ func (s *Slices[T]) Put(item []T) {
 	if item == nil {
 		return
 	}
+	item = item[:cap(item)]
 	p := s.PoolOf(cap(item))
 	if p == nil {
 		return

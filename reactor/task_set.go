@@ -88,11 +88,13 @@ func (tl *TaskSet) Stop() int64 {
 
 func (tl *TaskSet) Wake() error {
 	slots := tl.slots.slots
+	var wl *WakeList
 	for i := 0; i < len(slots); i++ {
-		if slots[i] == nil {
+		wl = slots[i]
+		if wl == nil {
 			continue
 		}
-		for !slots[i].wake() {
+		for !wl.wake() {
 			runtime.Gosched()
 		}
 	}

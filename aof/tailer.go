@@ -5,7 +5,6 @@ import (
 	"github.com/moontrade/kirana/pkg/atomicx"
 	"github.com/moontrade/kirana/pkg/util"
 	"github.com/moontrade/kirana/reactor"
-	logger "github.com/moontrade/log"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -103,7 +102,7 @@ func (t *Tailer) pushClosed(err error) {
 		e := recover()
 		if e != nil {
 			err = util.PanicToError(e)
-			logger.Error(err, "Consumer.PollReadClosed panic")
+			//logger.Error(err, "Consumer.PollReadClosed panic")
 		}
 	}()
 	var (
@@ -119,7 +118,7 @@ func (t *Tailer) pushRead(event ReadEvent) (n int64, err error) {
 		e := recover()
 		if e != nil {
 			err = util.PanicToError(e)
-			logger.Error(err, "Tailer.PollRead panic")
+			//logger.Error(err, "Tailer.PollRead panic")
 		}
 	}()
 	var (
@@ -182,7 +181,7 @@ Begin:
 	})
 	if err != nil {
 		if err != os.ErrClosed && err != reactor.ErrStop {
-			logger.WarnErr(err)
+			//logger.WarnErr(err)
 			return err
 		} else {
 			t.s.store(TailerClosing)

@@ -5,11 +5,11 @@ import "github.com/moontrade/kirana/pkg/wyhash"
 type HasherFunc[K any] func(key K) uint64
 
 func HashInt(key int) uint64 {
-	return wyhash.I64(int64(key))
+	return wyhash.U64Fast(uint64(key))
 }
 
 func HashInt64(key int64) uint64 {
-	return wyhash.I64(key)
+	return wyhash.U64Fast(uint64(key))
 }
 
 func HashString(key string) uint64 {
@@ -17,5 +17,9 @@ func HashString(key string) uint64 {
 }
 
 func HashUint64(key uint64) uint64 {
-	return wyhash.U64(key)
+	return wyhash.U64Fast(key)
+}
+
+func HashUintptr(key uintptr) uint64 {
+	return wyhash.UintptrFast(key)
 }

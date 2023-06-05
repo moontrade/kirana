@@ -11,7 +11,6 @@ import (
 	"github.com/moontrade/kirana/pkg/runtimex"
 	"github.com/moontrade/kirana/pkg/timex"
 	"github.com/moontrade/kirana/pkg/util"
-	logger "github.com/moontrade/log"
 	"github.com/panjf2000/ants"
 	"math"
 	"runtime"
@@ -117,7 +116,7 @@ type Reactor struct {
 	nextTick       counter.Counter
 	wakeCh         chan int64
 	pid            int32
-	gid            int64
+	gid            uint64
 	wg             sync.WaitGroup
 }
 
@@ -325,7 +324,7 @@ func (r *Reactor) run() {
 	defer func() {
 		e := recover()
 		if e != nil {
-			logger.Error(util.PanicToError(e))
+			//logger.Error(util.PanicToError(e))
 		}
 	}()
 	if r.config.LockOSThread {
@@ -443,7 +442,8 @@ func (r *Reactor) flushQueues() int {
 }
 
 func (r *Reactor) catchup(lastTick, currentTick int64) {
-	logger.Warn("skew detected of %d ticks", currentTick-1-lastTick)
+	//logger.Warn("skew detected of %d ticks", currentTick-1-lastTick)
+	println("skew detected of %d ticks", currentTick-1-lastTick)
 	//logger.Warn("catching up...")
 
 	now := timex.NanoTime()
@@ -492,7 +492,8 @@ func (r *Reactor) stopTask(time int64, task *Task) {
 		task.remove()
 		if e := recover(); e != nil {
 			err := util.PanicToError(e)
-			logger.Error(err, "Reactor.invoke panic")
+			_ = err
+			//logger.Error(err, "Reactor.invoke panic")
 		}
 	}()
 	_, ok := r.tasks.Delete(task.id)
@@ -509,7 +510,7 @@ func (r *Reactor) stopTask(time int64, task *Task) {
 			Reason: nil,
 		})
 		if err != nil {
-			logger.Warn(err)
+			//logger.Warn(err)
 		}
 	}
 }
@@ -518,7 +519,8 @@ func (r *Reactor) invoke(fn func()) {
 	defer func() {
 		if e := recover(); e != nil {
 			err := util.PanicToError(e)
-			logger.Error(err, "Reactor.invoke panic")
+			_ = err
+			//logger.Error(err, "Reactor.invoke panic")
 		}
 	}()
 	if fn != nil {
@@ -530,7 +532,8 @@ func (r *Reactor) pollStart(now int64, task *Task) {
 	defer func() {
 		if e := recover(); e != nil {
 			err := util.PanicToError(e)
-			logger.Error(err, "Reactor.pollInvoke panic")
+			_ = err
+			//logger.Error(err, "Reactor.pollInvoke panic")
 		}
 	}()
 	task.started = now
@@ -544,7 +547,7 @@ func (r *Reactor) pollStart(now int64, task *Task) {
 		if err == ErrStop {
 			task.stop = true
 		} else {
-			logger.Warn(err)
+			//logger.Warn(err)
 		}
 	}
 
@@ -597,7 +600,8 @@ func (r *Reactor) pollWake(now int64, task *Task) {
 	defer func() {
 		if e := recover(); e != nil {
 			err := util.PanicToError(e)
-			logger.Error(err, "Reactor.pollInvoke panic")
+			_ = err
+			//logger.Error(err, "Reactor.pollInvoke panic")
 		}
 	}()
 
@@ -620,7 +624,7 @@ func (r *Reactor) pollWake(now int64, task *Task) {
 		if err == ErrStop {
 			task.stop = true
 		} else {
-			logger.Warn(err)
+			//logger.Warn(err)
 		}
 	}
 
@@ -654,7 +658,8 @@ func (r *Reactor) pollInterval(now int64, list *taskSwapList, task *Task) bool {
 	defer func() {
 		if e := recover(); e != nil {
 			err := util.PanicToError(e)
-			logger.Error(err, "Reactor.pollInterval panic")
+			_ = err
+			//logger.Error(err, "Reactor.pollInterval panic")
 		}
 	}()
 
@@ -673,7 +678,7 @@ func (r *Reactor) pollInterval(now int64, list *taskSwapList, task *Task) bool {
 		if err == ErrStop {
 			task.stop = true
 		} else {
-			logger.Warn(err)
+			//logger.Warn(err)
 		}
 	}
 

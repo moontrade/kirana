@@ -4,6 +4,7 @@ package wyhash
 
 import (
 	"math"
+	"math/bits"
 	"unsafe"
 )
 
@@ -115,4 +116,19 @@ func U64(v uint64) uint64 {
 	//b ^= defaultSeedInit
 	wymum(&a, &b)
 	return wymix(a^s0^8, b^s1)
+}
+
+func wymum0(a, b uint64) uint64 {
+	a, b = bits.Mul64(a, b)
+	return a ^ b
+}
+
+func UintptrFast(v uintptr) uint64 {
+	return U64Fast(uint64(v))
+}
+
+func U64Fast(v uint64) uint64 {
+	return wymum0(s1^8, wymum0(
+		(v<<32|(v>>32&0xFFFFFFFF))^s1,
+		(v>>32|(v&0xFFFFFFFF))^DefaultSeed))
 }

@@ -122,6 +122,25 @@ func (m *Map[K, V]) set(hash uint64, key K, value V) (prev V, ok bool) {
 	}
 }
 
+func (m *Map[K, V]) GetValue(key K) (value V) {
+	buckets := m.buckets
+	if len(buckets) == 0 {
+		return value
+	}
+	mask := uint64(len(buckets) - 1)
+	h := m.hash(key)
+	i := h & mask
+	for {
+		if buckets[i].dib() == 0 {
+			return value
+		}
+		if buckets[i].hash() == h && buckets[i].key == key {
+			return buckets[i].value
+		}
+		i = (i + 1) & mask
+	}
+}
+
 // Get returns a value for a key.
 // Returns false when no value has been assign for key.
 func (m *Map[K, V]) Get(key K) (value V, ok bool) {

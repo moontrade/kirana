@@ -13,7 +13,6 @@ import (
 	"github.com/moontrade/kirana/pkg/runtimex"
 	"github.com/moontrade/kirana/pkg/timex"
 	"github.com/moontrade/kirana/pkg/util"
-	logger "github.com/moontrade/log"
 )
 
 func EnqueueBlocking(task func()) bool {
@@ -238,7 +237,8 @@ func (w *blockingWorker) invoke(task func()) {
 		e := recover()
 		if e != nil {
 			err := util.PanicToError(e)
-			logger.WarnErr(err, "panic")
+			_ = err
+			//logger.WarnErr(err, "panic")
 		}
 	}()
 	task()

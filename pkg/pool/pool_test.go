@@ -52,7 +52,7 @@ func BenchmarkConcurrentPool(b *testing.B) {
 	//	b.ResetTimer()
 	//	b.ReportAllocs()
 	//	for i := 0; i < b.N; i++ {
-	//		pool.Put(pool.Get())
+	//		pool.Put(pool.GetForFunc())
 	//	}
 	//})
 
@@ -81,8 +81,8 @@ func BenchmarkConcurrentPool(b *testing.B) {
 			//	pool.Put(unsafe.Pointer(&value[0]))
 			//}
 			//if i%4 == 0 {
-			//	pool.Get()
-			//	pool.Get()
+			//	pool.GetForFunc()
+			//	pool.GetForFunc()
 			//}
 			//if i%8 == 0 {
 			//	pool.Put(unsafe.Pointer(&value[0]))
@@ -92,9 +92,9 @@ func BenchmarkConcurrentPool(b *testing.B) {
 			//	pool.Put(unsafe.Pointer(&value[0]))
 			//	pool.Put(unsafe.Pointer(&value[0]))
 			//}
-			//pool.Get()
+			//pool.GetForFunc()
 			pool.Get()
-			//pool.Put(pool.Get())
+			//pool.Put(pool.GetForFunc())
 		}
 		b.StopTimer()
 		b.Log("N", b.N, "Allocs", allocs.Load())
@@ -179,8 +179,8 @@ func BenchmarkConcurrentPool(b *testing.B) {
 			//	pool.Put(unsafe.Pointer(&value[0]))
 			//}
 			//if i%4 == 0 {
-			//	pool.Get()
-			//	pool.Get()
+			//	pool.GetForFunc()
+			//	pool.GetForFunc()
 			//}
 			//if i%8 == 0 {
 			//	pool.Put(unsafe.Pointer(&value[0]))
@@ -191,8 +191,8 @@ func BenchmarkConcurrentPool(b *testing.B) {
 			//	pool.Put(unsafe.Pointer(&value[0]))
 			//}
 			pool.Get()
-			//pool.Put(pool.Get())
-			//pool.Put(pool.Get())
+			//pool.Put(pool.GetForFunc())
+			//pool.Put(pool.GetForFunc())
 		}
 		b.StopTimer()
 		b.Log("N", b.N, "Allocs", allocs.Load())
@@ -204,7 +204,7 @@ func BenchmarkConcurrentPool(b *testing.B) {
 	//
 	//	b.RunParallel(func(pb *testing.PB) {
 	//		for pb.Next() {
-	//			pool.Put(pool.Get())
+	//			pool.Put(pool.GetForFunc())
 	//		}
 	//	})
 	//})
@@ -217,11 +217,11 @@ func BenchmarkConcurrentPool(b *testing.B) {
 	//
 	//	b.RunParallel(func(pb *testing.PB) {
 	//		for pb.Next() {
-	//			pool.Put(pool.Get())
+	//			pool.Put(pool.GetForFunc())
 	//		}
 	//	})
 	//})
-	//b.Run("syncx.Pool Concurrent Get", func(b *testing.B) {
+	//b.Run("syncx.Pool Concurrent GetForFunc", func(b *testing.B) {
 	//	pool := &syncx.Pool{New: func() interface{} {
 	//		return value
 	//	}}
@@ -236,8 +236,8 @@ func BenchmarkConcurrentPool(b *testing.B) {
 	//
 	//	b.RunParallel(func(pb *testing.PB) {
 	//		for pb.Next() {
-	//			pool.Get()
-	//			//pool.Put(pool.Get())
+	//			pool.GetForFunc()
+	//			//pool.Put(pool.GetForFunc())
 	//		}
 	//	})
 	//})
@@ -257,7 +257,7 @@ func BenchmarkConcurrentPool(b *testing.B) {
 	//		}
 	//	})
 	//})
-	//b.Run("Pool Concurrent Get", func(b *testing.B) {
+	//b.Run("Pool Concurrent GetForFunc", func(b *testing.B) {
 	//	pool := NewPool[func()](Config[func()]{
 	//		AllocFunc: func() unsafe.Pointer {
 	//			return value
@@ -273,7 +273,7 @@ func BenchmarkConcurrentPool(b *testing.B) {
 	//
 	//	b.RunParallel(func(pb *testing.PB) {
 	//		for pb.Next() {
-	//			pool.Get()
+	//			pool.GetForFunc()
 	//		}
 	//	})
 	//})
@@ -528,7 +528,7 @@ func TestPool(t *testing.T) {
 			startWg.Done()
 			for x := 0; x < iterations; x++ {
 				pool.PutUnsafe(s.GetUnsafe())
-				//pool.Put(pool.Get())
+				//pool.Put(pool.GetForFunc())
 			}
 		}()
 	}
@@ -540,7 +540,7 @@ func TestPool(t *testing.T) {
 	elapsed := started.ElapsedDur()
 
 	//for i := 0; i < 10; i++ {
-	//	pool.Put(pool.Get())
+	//	pool.Put(pool.GetForFunc())
 	//	t.Log("pool size", pool.shard().Len())
 	//}
 	t.Log("allocs", allocs.Load(), "elapsed", elapsed, "ns/op", (elapsed / time.Duration(totalIterations)).String())
@@ -562,7 +562,7 @@ func BenchmarkTLSPool(b *testing.B) {
 		//shard := pool.shard()
 		for pb.Next() {
 			tlsPool.Put(tlsPool.Get())
-			//shard.Put(shard.Get())
+			//shard.Put(shard.GetForFunc())
 		}
 	})
 	b.Log("allocs", allocs.Load())

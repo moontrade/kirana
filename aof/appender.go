@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/moontrade/kirana/pkg/timex"
 	"github.com/moontrade/kirana/pkg/util"
-	logger "github.com/moontrade/log"
 	"io"
 	"os"
 	"sync/atomic"
@@ -74,7 +73,7 @@ func (aof *AOF) Finish() (err error) {
 		if aof.err != nil {
 			aof.m.stats.FlushErrors.Incr()
 			aof.m.stats.FlushErrorsDur.Add(elapsed)
-			logger.WarnErr(aof.err, "error when flushing mmap")
+			//logger.WarnErr(aof.err, "error when flushing mmap")
 		}
 
 		// Truncate
@@ -96,7 +95,7 @@ func (aof *AOF) Finish() (err error) {
 		if aof.err != nil {
 			aof.m.stats.ChmodErrors.Incr()
 			aof.m.stats.ChmodErrorsDur.Add(elapsed)
-			logger.WarnErr(aof.err, "error when chmod %s to read-only", path)
+			//logger.WarnErr(aof.err, "error when chmod %s to read-only", path)
 		}
 
 		if aof.err != nil {
@@ -290,7 +289,7 @@ func (aof *AOF) invokeAppendFn(event AppendEvent, fn AppendFunc) (n int64, err e
 	defer func() {
 		if e := recover(); e != nil {
 			err = util.PanicToError(e)
-			logger.Warn(err, "panic")
+			//logger.Warn(err, "panic")
 		}
 	}()
 	return fn(event)

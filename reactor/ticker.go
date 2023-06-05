@@ -16,8 +16,6 @@ import (
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/cow"
 	"github.com/moontrade/kirana/pkg/timex"
-	"github.com/moontrade/kirana/pkg/util"
-	logger "github.com/moontrade/log"
 	"github.com/moontrade/unsafe/cgo"
 	"os"
 	"runtime"
@@ -263,7 +261,7 @@ func (tl *TickListener) doNotify() {
 	defer func() {
 		if e := recover(); e != nil {
 			tl.notifyPanics++
-			logger.WarnErr(util.PanicToError(e), "panic")
+			//logger.WarnErr(util.PanicToError(e), "panic")
 		}
 	}()
 	select {

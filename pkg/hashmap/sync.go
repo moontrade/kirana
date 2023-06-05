@@ -47,6 +47,11 @@ func (m *SyncMap[K, V]) Get(key K) (val V, ok bool) {
 	return m.shards[h&m.mask].Get(h>>dibBitSize, key)
 }
 
+func (m *SyncMap[K, V]) GetValue(key K) V {
+	h := m.hasher(key)
+	return m.shards[h&m.mask].GetValue(h>>dibBitSize, key)
+}
+
 func (m *SyncMap[K, V]) GetOrCreate(key K, supplier func(K) V) (value V, created bool) {
 	return m.GetOrLoadCreate(key, supplier)
 }
@@ -181,8 +186,33 @@ func (s *shard[K, V]) get(hash uint64, key K) (val V, ok bool) {
 	}
 }
 
+func (s *shard[K, V]) getValue(hash uint64, key K) (val V) {
+	var (
+		m       = s.m
+		buckets = m.buckets
+	)
+	if len(buckets) == 0 {
+		return val
+	}
+	mask := uint64(len(buckets) - 1)
+	i := hash & mask
+	for {
+		if buckets[i].dib() == 0 {
+			return val
+		}
+		if buckets[i].hash() == hash && buckets[i].key == key {
+			return buckets[i].value
+		}
+		i = (i + 1) & mask
+	}
+}
+
 func (s *shard[K, V]) Get(hash uint64, key K) (val V, ok bool) {
 	return s.get(hash, key)
+}
+
+func (s *shard[K, V]) GetValue(hash uint64, key K) V {
+	return s.getValue(hash, key)
 }
 
 func (s *shard[K, V]) GetOrCreate(hash uint64, key K, supplier func(K) V) (value V, created bool) {

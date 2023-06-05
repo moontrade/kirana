@@ -4,7 +4,6 @@ import (
 	"github.com/moontrade/kirana/pkg/pmath"
 	"github.com/moontrade/kirana/pkg/spinlock"
 	"github.com/moontrade/kirana/pkg/util"
-	logger "github.com/moontrade/log"
 	"time"
 	"unsafe"
 )
@@ -124,7 +123,8 @@ func (t *Task) remove() {
 	defer func() {
 		if e := recover(); e != nil {
 			err := util.PanicToError(e)
-			logger.Error(err, "Task.remove panic")
+			_ = err
+			//logger.Error(err, "Task.remove panic")
 		}
 	}()
 	t.clearSlots()

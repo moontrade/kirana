@@ -1,7 +1,6 @@
 package reactor
 
 import (
-	logger "github.com/moontrade/log"
 	"runtime"
 	"testing"
 	"time"
@@ -43,7 +42,9 @@ func TestTicker(t *testing.T) {
 		for v := range ln.Chan() {
 			_ = v
 			tick := ln.next
-			logger.Debug("tick", tick.Tick, "dur", tick.Dur)
+			_ = tick
+			println("tick", tick.Tick, "dur", tick.Dur.String())
+			//logger.Debug("tick", tick.Tick, "dur", tick.Dur)
 			//if tick.Dur == time.Second {
 			//	logger.Debug(dur, "Avg Per Tick", time.Duration(ticker.ticksDur)/time.Duration(ticker.ticks.Load()))
 			//printMemStat(ms)

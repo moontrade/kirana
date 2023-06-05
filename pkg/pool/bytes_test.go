@@ -118,7 +118,7 @@ func BenchmarkRandomSizes(b *testing.B) {
 		pool := NewSyncSlicePool()
 		//for i := 0; i < b.N; i++ {
 		//	size := randomRangeSizes[i&mask]
-		//	pool.Put(pool.Get(size))
+		//	pool.Put(pool.GetForFunc(size))
 		//}
 		//clearList := make([][]byte, 0, maxAllocs)
 
@@ -140,7 +140,7 @@ func BenchmarkRandomSizes(b *testing.B) {
 		pool := NewSyncSlicePool()
 		//for i := 0; i < b.N; i++ {
 		//	size := randomRangeSizes[i&mask]
-		//	pool.Put(pool.Get(size))
+		//	pool.Put(pool.GetForFunc(size))
 		//}
 		//clearList := make([][]byte, 0, maxAllocs)
 
@@ -161,7 +161,7 @@ func BenchmarkRandomSizes(b *testing.B) {
 		pool := NewSyncxSlicePool()
 		//for i := 0; i < b.N; i++ {
 		//	size := randomRangeSizes[i&mask]
-		//	pool.Put(pool.Get(size))
+		//	pool.Put(pool.GetForFunc(size))
 		//}
 		//clearList := make([][]byte, 0, maxAllocs)
 
@@ -183,7 +183,7 @@ func BenchmarkRandomSizes(b *testing.B) {
 		pool := NewSyncSlicePool()
 		//for i := 0; i < b.N; i++ {
 		//	size := randomRangeSizes[i&mask]
-		//	pool.Put(pool.Get(size))
+		//	pool.Put(pool.GetForFunc(size))
 		//}
 		//clearList := make([][]byte, 0, maxAllocs)
 
@@ -203,7 +203,7 @@ func BenchmarkRandomSizes(b *testing.B) {
 	b.Run("Kirana", func(b *testing.B) {
 		//for i := 0; i < b.N; i++ {
 		//	size := randomRangeSizes[i&mask]
-		//	pool.Put(pool.Get(size))
+		//	pool.Put(pool.GetForFunc(size))
 		//}
 		//clearList := make([][]byte, 0, maxAllocs)
 
@@ -217,7 +217,7 @@ func BenchmarkRandomSizes(b *testing.B) {
 				i++
 				size := randomRangeSizes[i&mask]
 				Free(Alloc(size))
-				//pool.Put(pool.Get(size))
+				//pool.Put(pool.GetForFunc(size))
 			}
 		})
 	})
@@ -225,7 +225,7 @@ func BenchmarkRandomSizes(b *testing.B) {
 	b.Run("Kirana Slab", func(b *testing.B) {
 		//for i := 0; i < b.N; i++ {
 		//	size := randomRangeSizes[i&mask]
-		//	pool.Put(pool.Get(size))
+		//	pool.Put(pool.GetForFunc(size))
 		//}
 		//clearList := make([][]byte, 0, maxAllocs)
 
@@ -243,7 +243,7 @@ func BenchmarkRandomSizes(b *testing.B) {
 			//s := defaultBytes.s.pools[pmath.PowerOf2Index(size)].Shard()
 			for pb.Next() {
 				s.PutUnsafe(s.GetUnsafe())
-				//pool.Put(pool.Get(size))
+				//pool.Put(pool.GetForFunc(size))
 			}
 		})
 
@@ -293,7 +293,7 @@ func BenchmarkBytesPool_Get(b *testing.B) {
 			pool := NewSyncSlicePool()
 			//for i := 0; i < b.N; i++ {
 			//	size := randomRangeSizes[i&mask]
-			//	pool.Put(pool.Get(size))
+			//	pool.Put(pool.GetForFunc(size))
 			//}
 
 			b.ReportAllocs()
@@ -325,7 +325,7 @@ func BenchmarkBytesPool_Get(b *testing.B) {
 			pool := NewSyncxSlicePool()
 			//for i := 0; i < b.N; i++ {
 			//	size := randomRangeSizes[i&mask]
-			//	pool.Put(pool.Get(size))
+			//	pool.Put(pool.GetForFunc(size))
 			//}
 
 			b.ReportAllocs()
@@ -383,7 +383,7 @@ func BenchmarkBytesPool_Get(b *testing.B) {
 			pool := NewSyncSlicePool()
 			//for i := 0; i < b.N; i++ {
 			//	size := randomRangeSizes[i&mask]
-			//	pool.Put(pool.Get(size))
+			//	pool.Put(pool.GetForFunc(size))
 			//}
 
 			size := randomRangeSizes[0]
@@ -412,7 +412,7 @@ func BenchmarkBytesPool_Get(b *testing.B) {
 			pool := NewSyncxSlicePool()
 			//for i := 0; i < b.N; i++ {
 			//	size := randomRangeSizes[i&mask]
-			//	pool.Put(pool.Get(size))
+			//	pool.Put(pool.GetForFunc(size))
 			//}
 			size := randomRangeSizes[0]
 
@@ -464,14 +464,14 @@ func BenchmarkBytesPool_Get(b *testing.B) {
 	//	size := randomRangeSizes[12&mask]
 	//	pool := NewSyncSlicePool()
 	//	p := pool.pools[pmath.PowerOf2Index(size)]
-	//	p.Put(p.Get())
+	//	p.Put(p.GetForFunc())
 	//	clearList := make([][]byte, 0, 128)
 	//	var v []byte
 	//	b.ReportAllocs()
 	//	b.ResetTimer()
 	//
 	//	for i := 0; i < b.N; i++ {
-	//		v = p.Get().([]byte)
+	//		v = p.GetForFunc().([]byte)
 	//		clearList = append(clearList, v)
 	//		if len(clearList) == cap(clearList) {
 	//			for _, el := range clearList {
@@ -479,21 +479,21 @@ func BenchmarkBytesPool_Get(b *testing.B) {
 	//			}
 	//			clearList = clearList[:0]
 	//		}
-	//		//p.Put(p.Get())
+	//		//p.Put(p.GetForFunc())
 	//	}
 	//})
 	//b.Run("syncx.Pool Slab", func(b *testing.B) {
 	//	size := randomRangeSizes[12&mask]
 	//	pool := NewSyncxSlicePool()
 	//	p := pool.pools[pmath.PowerOf2Index(size)]
-	//	p.Put(p.Get())
+	//	p.Put(p.GetForFunc())
 	//	clearList := make([][]byte, 0, 128)
 	//	var v []byte
 	//	b.ReportAllocs()
 	//	b.ResetTimer()
 	//
 	//	for i := 0; i < b.N; i++ {
-	//		v = p.Get().([]byte)
+	//		v = p.GetForFunc().([]byte)
 	//		clearList = append(clearList, v)
 	//		if len(clearList) == cap(clearList) {
 	//			for _, el := range clearList {
@@ -501,20 +501,20 @@ func BenchmarkBytesPool_Get(b *testing.B) {
 	//			}
 	//			clearList = clearList[:0]
 	//		}
-	//		//p.Put(p.Get())
+	//		//p.Put(p.GetForFunc())
 	//	}
 	//})
 	//b.Run("Kirana Pool Slab", func(b *testing.B) {
 	//	size := randomRangeSizes[12&mask]
 	//	p := defaultBytes.s.Slab(size)
-	//	p.Put(p.Get())
+	//	p.Put(p.GetForFunc())
 	//	clearList := make([][]byte, 0, 128)
 	//	var v []byte
 	//	b.ReportAllocs()
 	//	b.ResetTimer()
 	//
 	//	for i := 0; i < b.N; i++ {
-	//		v = p.Get()
+	//		v = p.GetForFunc()
 	//		clearList = append(clearList, v)
 	//		if len(clearList) == cap(clearList) {
 	//			for _, el := range clearList {

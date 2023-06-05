@@ -11,6 +11,14 @@ const NanoTimeCost = time.Nanosecond * 20
 //go:linkname NanoTime runtime.nanotime
 func NanoTime() int64
 
+//go:linkname WallTime runtime.walltime
+func WallTime() (int64, int32)
+
+func Now() int64 {
+	seconds, nanos := WallTime()
+	return seconds*1000000000 + int64(nanos)
+}
+
 func Since(start int64) int64 {
 	return NanoTime() - start
 }

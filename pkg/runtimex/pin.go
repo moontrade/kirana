@@ -44,3 +44,22 @@ func Pid() (id int) {
 	//runtime_procUnpin()
 	//return
 }
+
+//go:nosplit
+func procPin() *g {
+	gp := getg()
+	mp := gp.m
+	mp.locks++
+	return gp
+}
+
+func procUnpinGp(gp *g) {
+	gp = getg()
+	gp.m.locks--
+}
+
+//go:nosplit
+func procUnpin() {
+	gp := getg()
+	gp.m.locks--
+}

@@ -16,12 +16,15 @@ import (
 )
 
 func init() {
-	reactor.Init(1, reactor.Millis500, 8192*8, 64)
+	reactor.Init(0, reactor.Millis500, 8192*8, 64)
 }
 
 var timer int64
 
 func TestTailer(t *testing.T) {
+	defer func() {
+		os.RemoveAll("testdata")
+	}()
 	debug.SetMemoryLimit(1024 * 1024 * 128)
 
 	//runtime.LockOSThread()

@@ -18,16 +18,17 @@ package fastrand
 import (
 	"math/bits"
 	"unsafe"
-
-	"github.com/moontrade/kirana/pkg/runtimex"
 )
 
+//go:linkname Fastrand runtime.fastrand
+func Fastrand() uint32
+
 // Uint32 returns a pseudo-random 32-bit value as a uint32.
-var Uint32 = runtimex.Fastrand
+var Uint32 = Fastrand
 
 // Uint64 returns a pseudo-random 64-bit value as a uint64.
 func Uint64() uint64 {
-	return (uint64(runtimex.Fastrand()) << 32) | uint64(runtimex.Fastrand())
+	return (uint64(Fastrand()) << 32) | uint64(Fastrand())
 }
 
 // Int returns a non-negative pseudo-random int.

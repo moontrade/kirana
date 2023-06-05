@@ -5,7 +5,6 @@ import (
 	"github.com/moontrade/kirana/pkg/counter"
 	"github.com/moontrade/kirana/pkg/runtimex"
 	"github.com/moontrade/kirana/pkg/timex"
-	logger "github.com/moontrade/log"
 	"github.com/panjf2000/ants/v2"
 	"reflect"
 	"runtime"
@@ -58,7 +57,7 @@ func TestBlockingPool(t *testing.T) {
 	wg.Add(1)
 	bp.Enqueue(func() {
 		defer wg.Done()
-		logger.Warn("invoked")
+		//logger.Warn("invoked")
 	})
 	wg.Wait()
 }
