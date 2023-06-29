@@ -41,11 +41,11 @@ func I8(v int8) uint64 {
 
 func U8(v uint8) uint64 {
 	var (
-		a = ((uint64(v) << 16) | (uint64(v) << 8) | uint64(v)) ^ s1
-		b = uint64(0) ^ defaultSeedInit
+		a = uint64(v)<<16 |
+			uint64(v)<<8 |
+			uint64(v)
 	)
-	wymum(&a, &b)
-	return wymix(a^s0^2, b^s1)
+	return wymix(s1^1, wymix(a^s1, 0^defaultSeedInit))
 }
 
 func I16(v int16) uint64 {
@@ -54,12 +54,15 @@ func I16(v int16) uint64 {
 
 func U16(v uint16) uint64 {
 	var (
-		b2 = uint64(*(*byte)(unsafe.Add(unsafe.Pointer(&v), 1)))
-		a  = (uint64(*(*byte)(unsafe.Pointer(&v)))<<16 | b2<<8 | b2) ^ s1
-		b  = uint64(0) ^ defaultSeedInit
+		//a = uint64(*(*byte)(unsafe.Pointer(&v)))<<16 |
+		//	uint64(*(*byte)(unsafe.Add(unsafe.Pointer(&v), 1)))<<8 |
+		//	uint64(*(*byte)(unsafe.Add(unsafe.Pointer(&v), 1)))
+
+		a = uint64(byte(v))<<16 |
+			uint64(byte(v>>8))<<8 |
+			uint64(byte(v>>8))
 	)
-	wymum(&a, &b)
-	return wymix(a^s0^2, b^s1)
+	return wymix(s1^2, wymix(a^s1, 0^defaultSeedInit))
 }
 
 func F32(v float32) uint64 {
@@ -70,52 +73,40 @@ func I32(v int32) uint64 {
 	return U32(uint32(v))
 }
 
-func U32(vv uint32) uint64 {
-	//var (
-	//	a     uint64
-	//	b     uint64
-	//	v     = uint64(vv)
-	//	bytes = unsafe.Pointer(&vv)
-	//)
-	//a = v<<32 | v
-	//var aa = read32(bytes)<<32 | read32(unsafe.Add(bytes, (4>>3)<<2))
-	//_ = aa
-	//var bb = read32(unsafe.Add(bytes, 4-4))<<32 |
-	//	read32(unsafe.Add(bytes, 4-4-((4>>3)<<2)))
-	//_ = bb
-	//b = v<<32 | v
-
+func U32(v uint32) uint64 {
 	var (
-		v = uint64(vv)
-		a = (v<<32 | v) ^ s1
-		b = a ^ defaultSeedInit
+		vv = uint64(v)
+		a  = vv<<32 | vv
 	)
-
-	//a ^= s1
-	//b ^= defaultSeedInit
-	wymum(&a, &b)
-	return wymix(a^s0^4, b^s1)
+	return wymix(s1^4, wymix(a^s1, a^defaultSeedInit))
 }
 
 func F64(v float64) uint64 {
 	return U64(math.Float64bits(v))
 }
 
+func Int(v int) uint64 {
+	return U64(uint64(v))
+}
+
 func I64(v int64) uint64 {
 	return U64(*(*uint64)(unsafe.Pointer(&v)))
 }
 
+func Int64(v int64) uint64 {
+	return U64(*(*uint64)(unsafe.Pointer(&v)))
+}
+
+func Uint64(v uint64) uint64 {
+	return U64(v)
+}
+
 func U64(v uint64) uint64 {
 	var (
-		a uint64
-		b uint64
+		a = v<<32 | v>>32
+		b = ((v >> 32) << 32) | ((v << 32) >> 32)
 	)
-	a = (v<<32 | v>>32) ^ s1
-	b = (((v >> 32) << 32) | ((v << 32) >> 32)) ^ defaultSeedInit
-	//a ^= s1
-	//b ^= defaultSeedInit
-	wymum(&a, &b)
-	return wymix(a^s0^8, b^s1)
+	return wymix(s1^8, wymix(a^s1, b^defaultSeedInit))
 }
 
 func wymum0(a, b uint64) uint64 {
@@ -123,12 +114,6 @@ func wymum0(a, b uint64) uint64 {
 	return a ^ b
 }
 
-func UintptrFast(v uintptr) uint64 {
-	return U64Fast(uint64(v))
-}
-
-func U64Fast(v uint64) uint64 {
-	return wymum0(s1^8, wymum0(
-		(v<<32|(v>>32&0xFFFFFFFF))^s1,
-		(v>>32|(v&0xFFFFFFFF))^DefaultSeed))
+func Uintptr(v uintptr) uint64 {
+	return U64(uint64(v))
 }

@@ -15,6 +15,8 @@ const (
 	maxDIB      = ^uint64(0) >> hashBitSize // max 65,535
 )
 
+type HasherFunc[K any] func(key K) uint64
+
 type entry[K comparable, V any] struct {
 	hdib  uint64 // bitfield { hash:48 dib:16 }
 	value V      // user value

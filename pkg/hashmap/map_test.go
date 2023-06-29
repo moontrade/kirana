@@ -6,6 +6,7 @@ package hashmap
 
 import (
 	"fmt"
+	"github.com/moontrade/kirana/pkg/wyhash"
 	"math/rand"
 	"os"
 	"reflect"
@@ -73,7 +74,7 @@ type imap struct {
 
 func newimap(cap int) *imap {
 	m := new(imap)
-	m.m = New[string, interface{}](cap, HashString)
+	m.m = New[string, interface{}](cap, wyhash.String)
 	return m
 }
 
@@ -511,7 +512,7 @@ func copyMapTest(N int, m1 *Map[int, int], e11 []entry[int, int], deep bool) {
 func TestMapCopy(t *testing.T) {
 	N := 1_000
 	// create the initial map
-	m1 := New[int, int](0, HashInt)
+	m1 := New[int, int](0, wyhash.Int)
 	for m1.Len() < N {
 		m1.Set(rand.Int(), rand.Int())
 	}

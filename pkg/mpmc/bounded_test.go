@@ -26,7 +26,7 @@ func BenchmarkMPSC(b *testing.B) {
 	//ptr := unsafe.Pointer(task)
 
 	//go func() {
-	//	<-rb.wakeCh
+	//	<-rb.waker
 	//	c.Incr()
 	//	if c.Load()%1000 == 0 {
 	//		fmt.Println(c.Load())
@@ -39,7 +39,7 @@ func BenchmarkMPSC(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		rb.Enqueue(task)
 		rb.Dequeue()
-		//<-rb.wakeCh
+		//<-rb.waker
 		//if t != task {
 		//	b.Fatal("bad")
 		//}
@@ -66,7 +66,7 @@ func TestMPSC(t *testing.T) {
 	//ptr := unsafe.Pointer(task)
 
 	//go func() {
-	//	<-rb.wakeCh
+	//	<-rb.waker
 	//	c.Incr()
 	//	if c.Load()%1000 == 0 {
 	//		fmt.Println(c.Load())
@@ -77,7 +77,7 @@ func TestMPSC(t *testing.T) {
 	for i := 0; i < 64; i++ {
 		rb.Enqueue(task)
 		rb.Dequeue()
-		//<-rb.wakeCh
+		//<-rb.waker
 		//if t != task {
 		//	b.Fatal("bad")
 		//}

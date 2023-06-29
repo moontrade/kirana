@@ -1,4 +1,4 @@
-//go:build go1.20
+//go:build (amd64 || arm64) && go1.20
 
 package logger
 

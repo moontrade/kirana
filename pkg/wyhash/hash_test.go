@@ -16,6 +16,34 @@ func print_hash(s string) {
 	fmt.Printf("%s: %d\n", s, String(s))
 }
 
+func TestInit(t *testing.T) {
+	//seed := defaultSeedInit
+	//seed ^= s0
+	//fmt.Println(seed)
+
+	fmt.Println("")
+	var val8 uint8 = 29
+	fmt.Println("U8 ", U8(val8))
+	fmt.Println("Hash", Hash(unsafe.Pointer(&val8), 1))
+
+	fmt.Println("")
+	var val16 uint16 = 1113
+	fmt.Println("U16 ", U16(val16))
+	fmt.Println("Hash", Hash(unsafe.Pointer(&val16), 2))
+
+	fmt.Println("")
+	var val32 uint32 = 11133
+	fmt.Println("U32 ", U32(val32))
+	fmt.Println("Hash", Hash(unsafe.Pointer(&val32), 4))
+	fmt.Println("")
+
+	var val uint64 = 1113
+	fmt.Println("U64 ", U64(val))
+	fmt.Println("Hash", Hash(unsafe.Pointer(&val), 8))
+
+	//fmt.Println(CryptoSeed())
+}
+
 func TestMul64(t *testing.T) {
 	print_hash("h")
 	print_hash("he")

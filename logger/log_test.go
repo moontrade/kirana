@@ -155,28 +155,16 @@ func BenchmarkInfo(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			Slog(TestMessage,
-				String("string", TestString),
-				Int("status", TestInt),
-				Duration("duration", TestDuration),
-				Time("time", TestTime),
-				Any("error", TestError),
-			)
+
 		}
 	})
-	b.Run("kirana", func(b *testing.B) {
+
+	b.Run("slog group", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			Log(
-				"string", TestString,
-				"status", TestInt,
-				"duration", TestDuration,
-				//"time", TestTime,
-				"error", TestError,
-				TestMessage,
-			)
+
 		}
 	})
 }

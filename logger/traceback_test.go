@@ -39,7 +39,8 @@ func BenchmarkCallerFunc(b *testing.B) {
 	defer func() {
 		println("count", count.Load())
 	}()
-	b.Run("get parallel", func(b *testing.B) {
+	b.Run("parallel", func(b *testing.B) {
+		getCallerFunc()
 		getCallerFunc()
 
 		b.SetParallelism(2048)
@@ -52,7 +53,8 @@ func BenchmarkCallerFunc(b *testing.B) {
 			}
 		})
 	})
-	b.Run("no callback", func(b *testing.B) {
+	b.Run("single thread", func(b *testing.B) {
+		getCallerFunc()
 		getCallerFunc()
 
 		b.ReportAllocs()

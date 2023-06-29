@@ -2,6 +2,7 @@ package logger
 
 import (
 	"github.com/moontrade/kirana/pkg/hashmap"
+	"github.com/moontrade/kirana/pkg/wyhash"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -47,8 +48,8 @@ type FuncInfoMap struct {
 
 func NewFuncInfoMap() *FuncInfoMap {
 	return &FuncInfoMap{
-		data:    hashmap.New[uintptr, *FuncInfo](1024, hashmap.HashUintptr),
-		methods: hashmap.New[uintptr, *FuncInfo](1024, hashmap.HashUintptr),
+		data:    hashmap.New[uintptr, *FuncInfo](1024, wyhash.Uintptr),
+		methods: hashmap.New[uintptr, *FuncInfo](1024, wyhash.Uintptr),
 		mu:      sync.Mutex{},
 	}
 }
@@ -136,6 +137,8 @@ func (fip *FuncInfoMap) GetForFunc(fn func()) *FuncInfo {
 	return fip.data.GetValue(FuncToPC(fn))
 }
 
+var unknownFunc = &FuncInfo{}
+
 func (fip *FuncInfoMap) GetForPC(pc uintptr) *FuncInfo {
 	info := fip.data.GetValue(pc)
 	if info != nil {
@@ -143,6 +146,9 @@ func (fip *FuncInfoMap) GetForPC(pc uintptr) *FuncInfo {
 	}
 
 	fn := findfunc(pc)
+	if !fn.valid() {
+		return unknownFunc
+	}
 	funk := fn._Func()
 	info = &FuncInfo{
 		pc:    pc,

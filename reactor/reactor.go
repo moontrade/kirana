@@ -11,6 +11,7 @@ import (
 	"github.com/moontrade/kirana/pkg/runtimex"
 	"github.com/moontrade/kirana/pkg/timex"
 	"github.com/moontrade/kirana/pkg/util"
+	"github.com/moontrade/kirana/pkg/wyhash"
 	"github.com/panjf2000/ants"
 	"math"
 	"runtime"
@@ -164,7 +165,7 @@ func NewReactor(config Config) (*Reactor, error) {
 		level3Wheel:    config.Level3Wheel,
 		ticksPerLevel3: int64(config.Level3Wheel.tickDur / config.Level1Wheel.tickDur),
 		wakeCh:         wakeCh,
-		tasks:          hashmap.NewSyncMap[int64, *Task](8, 1024, hashmap.HashInt64),
+		tasks:          hashmap.NewSyncMap[int64, *Task](8, 1024, wyhash.Int64),
 		wakeQ:          mpmc.NewBoundedWake[Task](int64(config.WakeQSize), wakeCh),
 		wakeListQ:      mpmc.NewBoundedWake[WakeList](int64(config.WakeQSize), wakeCh),
 		spawnQ:         mpmc.NewBoundedWake[Task](int64(config.SpawnQSize), wakeCh),

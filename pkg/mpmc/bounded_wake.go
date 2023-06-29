@@ -23,7 +23,7 @@ type BoundedWake[T any] struct {
 	_             [CacheLinePad - unsafe.Sizeof(reflect.SliceHeader{}) - 8]byte
 	wake          int64
 	_             [CacheLinePad - 8]byte
-	wakeCh        chan int64
+	waker         chan int64
 	wakeCount     counter.Counter
 	wakeFull      counter.Counter
 	overflowCount counter.Counter
@@ -44,11 +44,11 @@ func NewBoundedWake[T any](capacity int64, wake chan int64) *BoundedWake[T] {
 		atomic.StoreInt64(&n.seq, int64(i))
 	}
 	return &BoundedWake[T]{
-		head:   0,
-		tail:   0,
-		mask:   capacity - 1,
-		wakeCh: wake,
-		nodes:  nodes,
+		head:  0,
+		tail:  0,
+		mask:  capacity - 1,
+		waker: wake,
+		nodes: nodes,
 	}
 }
 
@@ -61,7 +61,7 @@ func (b *BoundedWake[T]) WakeChanFullCount() int64 {
 }
 
 func (b *BoundedWake[T]) Wake() <-chan int64 {
-	return b.wakeCh
+	return b.waker
 }
 
 func (b *BoundedWake[T]) Len() int {
@@ -115,12 +115,12 @@ func (b *BoundedWake[T]) Enqueue(data *T) bool {
 	atomic.StorePointer(&cell.data, unsafe.Pointer(data))
 	atomic.StoreInt64(&cell.seq, pos+1)
 
-	if b.wakeCh != nil && pos-atomic.LoadInt64(&b.head) == 0 {
-		//if b.wakeCh != nil && atomic.LoadInt64(&b.wake) == 0 {
+	if b.waker != nil && pos-atomic.LoadInt64(&b.head) == 0 {
+		//if b.waker != nil && atomic.LoadInt64(&b.wake) == 0 {
 		if atomic.CompareAndSwapInt64(&b.wake, 0, 1) {
 			b.wakeCount.Incr()
 			select {
-			case b.wakeCh <- 0:
+			case b.waker <- 0:
 			default:
 				b.wakeFull.Incr()
 			}
@@ -186,12 +186,12 @@ func (b *BoundedWake[T]) EnqueueUnsafe(data unsafe.Pointer) bool {
 	atomic.StorePointer(&cell.data, data)
 	atomic.StoreInt64(&cell.seq, pos+1)
 
-	if b.wakeCh != nil && pos-atomic.LoadInt64(&b.head) == 0 {
-		//if b.wakeCh != nil && atomic.LoadInt64(&b.wake) == 0 {
+	if b.waker != nil && pos-atomic.LoadInt64(&b.head) == 0 {
+		//if b.waker != nil && atomic.LoadInt64(&b.wake) == 0 {
 		if atomic.CompareAndSwapInt64(&b.wake, 0, 1) {
 			b.wakeCount.Incr()
 			select {
-			case b.wakeCh <- 0:
+			case b.waker <- 0:
 			default:
 				b.wakeFull.Incr()
 			}

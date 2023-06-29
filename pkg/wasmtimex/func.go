@@ -70,6 +70,7 @@ typedef struct do_wasmtime_func_call_unchecked_t {
 	size_t context;
 	size_t func;
 	size_t args;
+	size_t length;
 	size_t trap;
 } do_wasmtime_func_call_unchecked_t;
 
@@ -79,6 +80,7 @@ void do_wasmtime_func_call_unchecked(size_t arg0, size_t arg1) {
 		(wasmtime_context_t*)(void*)args->context,
 		(const wasmtime_func_t*)(void*)args->func,
 		(wasmtime_val_raw_t*)(void*)args->args,
+		args->length,
 		(wasm_trap_t**)(void*)args->trap
 	);
 }
@@ -479,11 +481,13 @@ func (f *Func) CallUnchecked(ctx *Context, argsAndResults []ValRaw) *Trap {
 		context uintptr
 		fn      uintptr
 		args    uintptr
+		length  uintptr
 		trap    uintptr
 	}{
 		context: uintptr(unsafe.Pointer(ctx)),
 		fn:      uintptr(unsafe.Pointer(f)),
 		args:    dataPtr(argsAndResults),
+		length:  uintptr(len(argsAndResults)),
 		trap:    uintptr(unsafe.Pointer(&trap)),
 	}
 	cgo.NonBlocking((*byte)(C.do_wasmtime_func_call_unchecked), uintptr(unsafe.Pointer(&args)), 0)
@@ -521,11 +525,13 @@ func (f *Func) CallUncheckedBlocking(ctx *Context, argsAndResults []Val) *Trap {
 		context uintptr
 		fn      uintptr
 		args    uintptr
+		length  uintptr
 		trap    uintptr
 	}{
 		context: uintptr(unsafe.Pointer(ctx)),
 		fn:      uintptr(unsafe.Pointer(f)),
 		args:    dataPtr(argsAndResults),
+		length:  uintptr(len(argsAndResults)),
 		trap:    uintptr(unsafe.Pointer(&trap)),
 	}
 	cgo.Blocking((*byte)(C.do_wasmtime_func_call_unchecked), uintptr(unsafe.Pointer(&args)), 0)

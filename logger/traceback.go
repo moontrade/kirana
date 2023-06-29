@@ -747,19 +747,30 @@ func getCallerPCSlowSlow() {
 
 func getCallerFunc() *FuncInfo {
 	gp := procPin()
+	g0 := gp.m.g0
+	if g0 == nil {
+		procUnpinGp(gp)
+		return unknownFunc
+	}
 	prevWriteBuf := gp.writebuf
-	prevG0WriteBuf := gp.m.g0.writebuf
+	prevG0WriteBuf := g0.writebuf
 	gp.writebuf = *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(gp)),
-		Len:  0,
-		Cap:  0,
+		Data: uintptr(unsafe.Pointer(g0)),
+		Len:  int(unsafe.Sizeof(uintptr(0))),
+		Cap:  int(unsafe.Sizeof(uintptr(0))),
 	}))
-	gp.m.g0.writebuf = gp.writebuf
-
+	g0.writebuf = *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(gp)),
+		Len:  int(unsafe.Sizeof(uintptr(0))),
+		Cap:  int(unsafe.Sizeof(uintptr(0))),
+	}))
 	systemstack(func() {
 		this := getg()
 		gpp := (*g)(unsafe.Pointer((*reflect.SliceHeader)(unsafe.Pointer(&this.writebuf)).Data))
 		this.writebuf = nil
+		if gpp == nil || gpp.m.g0 != this {
+			return
+		}
 		var (
 			sp0 uintptr
 			sp  uintptr
@@ -774,15 +785,13 @@ func getCallerFunc() *FuncInfo {
 		} else {
 			sp = sp0 + callerSPOffset
 		}
-		(*reflect.SliceHeader)(unsafe.Pointer(&gpp.writebuf)).Data = sp
+		(*reflect.SliceHeader)(unsafe.Pointer(&gpp.writebuf)).Data = *(*uintptr)(unsafe.Pointer(sp))
 	})
-
-	sp := *(*uintptr)(unsafe.Pointer(&gp.writebuf))
+	pc := (*reflect.SliceHeader)(unsafe.Pointer(&gp.writebuf)).Data
 	gp.writebuf = prevWriteBuf
-	gp.m.g0.writebuf = prevG0WriteBuf
-	pc := *(*uintptr)(unsafe.Pointer(sp))
+	g0.writebuf = prevG0WriteBuf
+	// procUnpin
 	procUnpinGp(gp)
-
 	info := funcInfoMap.GetForPC(pc)
 	return info
 }

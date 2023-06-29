@@ -14,7 +14,7 @@ import (
 
 // A Level is the importance or severity of a log event.
 // The higher the level, the more important or severe the event.
-type Level int
+type Level int8
 
 // Level numbers are inherently arbitrary,
 // but we picked them to satisfy three constraints.

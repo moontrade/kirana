@@ -23,7 +23,6 @@ func procPin() *g {
 }
 
 func procUnpinGp(gp *g) {
-	gp = getg()
 	gp.m.locks--
 }
 

@@ -2,6 +2,7 @@ package hashmap
 
 import (
 	"github.com/moontrade/kirana/pkg/fastrand"
+	"github.com/moontrade/kirana/pkg/wyhash"
 	"sync"
 	"testing"
 )
@@ -10,7 +11,7 @@ const initsize = 1024
 
 func BenchmarkMap(b *testing.B) {
 	b.Run("hashmap.Map", func(b *testing.B) {
-		m := New[int, int](4096, HashInt)
+		m := New[int, int](4096, wyhash.Int)
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -21,7 +22,7 @@ func BenchmarkMap(b *testing.B) {
 	})
 
 	b.Run("hashmap.SyncMap", func(b *testing.B) {
-		m := NewSyncMap[int, int](0, 1024, HashInt)
+		m := NewSyncMap[int, int](0, 1024, wyhash.Int)
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -32,7 +33,7 @@ func BenchmarkMap(b *testing.B) {
 	})
 
 	b.Run("hashmap.Map get", func(b *testing.B) {
-		m := New[int, int](4096, HashInt)
+		m := New[int, int](4096, wyhash.Int)
 		const count = 128
 		const mask = count - 1
 		for i := 0; i < count; i++ {
@@ -46,7 +47,7 @@ func BenchmarkMap(b *testing.B) {
 	})
 
 	b.Run("hashmap.SyncMap get", func(b *testing.B) {
-		m := NewSyncMap[int, int](0, 1024, HashInt)
+		m := NewSyncMap[int, int](0, 1024, wyhash.Int)
 		const count = 128
 		const mask = count - 1
 		for i := 0; i < count; i++ {
@@ -73,7 +74,7 @@ func BenchmarkMap(b *testing.B) {
 
 func BenchmarkConcurrent(b *testing.B) {
 	b.Run("hashmap.SyncMap 30% Delete 70% Store", func(b *testing.B) {
-		m := NewSyncMap[int, int](0, 1024, HashInt)
+		m := NewSyncMap[int, int](0, 1024, wyhash.Int)
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
@@ -103,7 +104,7 @@ func BenchmarkConcurrent(b *testing.B) {
 	})
 
 	b.Run("hashmap.SyncMap 30% Delete 30% Store 40% GetForFunc", func(b *testing.B) {
-		m := NewSyncMap[int, int](0, 1024, HashInt)
+		m := NewSyncMap[int, int](0, 1024, wyhash.Int)
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
@@ -139,7 +140,7 @@ func BenchmarkConcurrent(b *testing.B) {
 	})
 
 	b.Run("hashmap.SyncMap 20% Store 80% GetForFunc", func(b *testing.B) {
-		m := NewSyncMap[int, int](0, 1024, HashInt)
+		m := NewSyncMap[int, int](0, 1024, wyhash.Int)
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
@@ -190,7 +191,7 @@ func BenchmarkLoad(b *testing.B) {
 		})
 	})
 	b.Run("hashmap.Map GetForFunc", func(b *testing.B) {
-		var m = New[int64, struct{}](1024*2, HashInt64)
+		var m = New[int64, struct{}](1024*2, wyhash.Int64)
 		for i := 0; i < initsize; i++ {
 			m.Set(int64(i), struct{}{})
 		}
@@ -207,7 +208,7 @@ func BenchmarkLoad(b *testing.B) {
 		})
 	})
 	b.Run("hashmap.SyncMap GetForFunc", func(b *testing.B) {
-		var m = NewSyncMap[int64, struct{}](512, 1024, HashInt64)
+		var m = NewSyncMap[int64, struct{}](512, 1024, wyhash.Int64)
 		for i := 0; i < initsize; i++ {
 			m.Put(int64(i), struct{}{})
 		}
@@ -224,7 +225,7 @@ func BenchmarkLoad(b *testing.B) {
 		})
 	})
 	b.Run("hashmap.SyncMap GetOrLoad", func(b *testing.B) {
-		var m = NewSyncMap[int64, struct{}](512, 1024, HashInt64)
+		var m = NewSyncMap[int64, struct{}](512, 1024, wyhash.Int64)
 		for i := 0; i < initsize; i++ {
 			m.Put(int64(i), struct{}{})
 		}
@@ -241,7 +242,7 @@ func BenchmarkLoad(b *testing.B) {
 		})
 	})
 	b.Run("hashmap.SyncMap Load", func(b *testing.B) {
-		var m = NewSyncMap[int64, struct{}](512, 1024, HashInt64)
+		var m = NewSyncMap[int64, struct{}](512, 1024, wyhash.Int64)
 		for i := 0; i < initsize; i++ {
 			m.Put(int64(i), struct{}{})
 		}

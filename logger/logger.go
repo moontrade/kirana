@@ -7,6 +7,9 @@ import (
 	"unsafe"
 )
 
+type Logger struct {
+}
+
 func Info0() {
 	gp := procPin()
 	prevWriteBuf := gp.writebuf
